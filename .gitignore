@@ -1,3 +1,28 @@
+#Local project entries
+linux/
+
+#Autoconf output
+Makefile.in
+Makefile
+aclocal.m4
+autom4te.cache
+compile
+stamp-h1
+missing
+install-sh
+config.*
+configure
+initrd/init
+initrd/perf
+data.tar.gz
+configure~
+stamp-linux-dir
+vmlinuz
+upcall-initrd
+
+tcp_echo
+tcp_client
+
 # Prerequisites
 *.d
 
