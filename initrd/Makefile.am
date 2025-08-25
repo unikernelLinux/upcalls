@@ -19,5 +19,8 @@
 CLEANFILES=upcall-initrd.cpio.xz data.tar.gz perf
 EXTRABIN=""
 
-upcall-initrd.cpio.xz:
+upcall-initrd:
 	./create-initrd.sh $(EXTRABIN)
+
+upcall-initrd.cpio.xz: upcall-initrd
+	cd upcall-initrd && find . | cpio -o -H newc | xz --format=lzma > ../upcall-initrd.cpio.xz

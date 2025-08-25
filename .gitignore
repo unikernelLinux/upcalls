@@ -16,12 +16,15 @@ initrd/init
 initrd/perf
 data.tar.gz
 configure~
+
+#Build artifacts
 stamp-linux-dir
 vmlinuz
 upcall-initrd
-
+initrd/lib/
 tcp_echo
 tcp_client
+upcall-initrd.cpio.xz
 
 # Prerequisites
 *.d

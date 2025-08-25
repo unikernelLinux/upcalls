@@ -63,7 +63,7 @@ stamp-linux-dir:
 	fi
 	touch $@
 
-initrd/perf: stamp-linux-dir linux/tools/perf/perf
+initrd/perf: linux/tools/perf/perf stamp-linux-dir
 	cp $< $@
 
 linux/tools/perf/perf: stamp-linux-dir
@@ -97,7 +97,7 @@ $(abs_top_builddir)/libupcall/libupcall.a:
 # Per-program configuration and data files (if required).
 $(PROGRAM)/data.tar.gz: $(UPCALL_LIB)
 	rm -f $@
-	-cd $(PROGRAM) && $(MAKE) all
+	cd $(PROGRAM) && $(MAKE) all
 	if ! test -f $@; then tar zcf $@ --no-recursion . ; fi
 
 #----------------------------------------------------------------------
