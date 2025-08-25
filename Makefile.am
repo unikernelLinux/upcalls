@@ -66,7 +66,7 @@ stamp-linux-dir:
 initrd/perf: linux/tools/perf/perf stamp-linux-dir
 	cp $< $@
 
-linux/tools/perf/perf: stamp-linux-dir
+linux/tools/perf/perf: stamp-linux-dir linux/arch/x86/boot/bzImage
 	$(MAKE) -C $(srcdir)/linux/tools perf
 
 vmlinuz: stamp-linux-dir linux/arch/x86/boot/bzImage
@@ -93,6 +93,9 @@ endif
 $(abs_top_builddir)/libupcall/libupcall.a:
 	cd $(abs_top_builddir)/libupcall && $(MAKE) 
 
+$(PROGRAM)/stamp-initrd:
+	$(MAKE) -C $(PROGRAM) stamp-initrd
+
 #----------------------------------------------------------------------
 # Per-program configuration and data files (if required).
 $(PROGRAM)/data.tar.gz: $(UPCALL_LIB)
@@ -105,7 +108,7 @@ $(PROGRAM)/data.tar.gz: $(UPCALL_LIB)
 
 noinst_DATA += upcall-initrd.cpio.xz
 # TODO add our application to the initrd
-upcall-initrd.cpio.xz: $(PROGRAM) $(PROGRAM)/data.tar.gz vmlinuz initrd/perf
+upcall-initrd.cpio.xz: $(PROGRAM) $(PROGRAM)/stamp-initrd $(PROGRAM)/data.tar.gz vmlinuz initrd/perf
 	cp $(PROGRAM)/data.tar.gz initrd/
 	$(MAKE) -C $(srcdir)/initrd $@
 	cp initrd/$@ $@

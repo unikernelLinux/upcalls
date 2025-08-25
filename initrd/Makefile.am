@@ -16,11 +16,11 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-CLEANFILES=upcall-initrd.cpio.xz data.tar.gz perf
+CLEANFILES=upcall-initrd.cpio.xz data.tar.gz perf app/*
 EXTRABIN=""
 
 upcall-initrd:
 	./create-initrd.sh $(EXTRABIN)
 
 upcall-initrd.cpio.xz: upcall-initrd
-	cd upcall-initrd && find . | cpio -o -H newc | xz --format=lzma > ../upcall-initrd.cpio.xz
+	pushd upcall-initrd && find . | cpio -o -H newc | xz --format=lzma > ../upcall-initrd.cpio.xz && popd

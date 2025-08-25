@@ -25,6 +25,7 @@ initrd/lib/
 tcp_echo
 tcp_client
 upcall-initrd.cpio.xz
+event-tester/stamp-initrd
 
 # Prerequisites
 *.d

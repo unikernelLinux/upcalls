@@ -16,7 +16,7 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-CLEANFILES = *~ *.o *.a tcp_client tcp_echo
+CLEANFILES = *~ *.o *.a tcp_client tcp_echo data.tar.gz stamp-initrd
 
 noinst_DATA = 
 
@@ -58,10 +58,16 @@ liburing.a: stamp-liburing-dir
 tcp_client: tcp_client.c echo_defs.h tsc_logger.h
 	gcc -o $@ $< -ggdb -Wall -Werror -lpthread
 
-tcp_echo: tcp_echo.c $(EV_SYS).c tsc_logger.h echo_defs.h $(UPCALL_LIB)
-	gcc -o $@ tcp_echo.c $(EV_SYS).c -ggdb -Wall -Werror -lpthread
+tcp_echo: tcp_echo.c $(EV_SYS).c tsc_logger.h echo_defs.h $(UPCALL_LIB) $(SYS_LIB)
+	gcc -o $@ tcp_echo.c $(EV_SYS).c $(UPCALL_LIB) $(SYS_LIB) -ggdb -Wall -Werror -lpthread
 
 all: tcp_client tcp_echo
+
+stamp-initrd: tcp_echo
+	rm -f $@
+	mkdir -p ../initrd/app
+	cp tcp_echo ../initrd/app
+	touch $@
 
 # automake doesn't add this rule unless we were to specify a C program
 # to compile, which we don't want to do because of the very special

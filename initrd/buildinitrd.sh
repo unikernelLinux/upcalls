@@ -23,7 +23,6 @@ copy()
 
 printf "Creating initramfs structure ... "
 
-set -xe
 cp ./perf /usr/sbin/
 
 binfiles="cat ls mkdir lspci mknod mount bash top touch awk less"
@@ -125,6 +124,9 @@ if [ -s data.tar.gz ] ; then
 fi
 
 cp -r exp ${WDIR}
+
+cp app/* ${WDIR}
+
 mv lib/modules ${WDIR}/lib
 
 rm -f $unsorted
