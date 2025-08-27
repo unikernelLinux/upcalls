@@ -91,6 +91,11 @@ for f in $sbinfiles ; do
   copy $f sbin
 done
 
+for f in `ls app/` ; do
+  ldd $f | sed "s/\t//" | cut -d " " -f1 >> $unsorted
+  cp f ${WDIR}/usr/bin/
+done
+
 # Install libraries
 sort $unsorted | uniq | while read library ; do
 # linux-vdso and linux-gate are pseudo libraries and do not correspond to a file
@@ -124,8 +129,6 @@ if [ -s data.tar.gz ] ; then
 fi
 
 cp -r exp ${WDIR}
-
-cp app/* ${WDIR}
 
 mv lib/modules ${WDIR}/lib
 
