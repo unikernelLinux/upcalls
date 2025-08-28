@@ -57,7 +57,7 @@ AC_ARG_WITH([app-trigger],
     [AS_HELP_STRING([--with-app-trigger],
 	[set the string checked in exec to trigger the target process @<:@default=/usr/bin/tcp_echo@:>@])],
 	[TRIGGER="$withval"],
-	[TRIGGER="/usr/bin/tcp-echo"])
+	[TRIGGER="/usr/bin/tcp_echo"])
 AC_MSG_RESULT([$TRIGGER])
 AC_SUBST([TRIGGER])
 

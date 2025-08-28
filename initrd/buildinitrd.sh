@@ -92,8 +92,8 @@ for f in $sbinfiles ; do
 done
 
 for f in `ls app/` ; do
-  ldd $f | sed "s/\t//" | cut -d " " -f1 >> $unsorted
-  cp f ${WDIR}/usr/bin/
+  ldd app/$f | sed "s/\t//" | cut -d " " -f1 >> $unsorted
+  cp app/$f ${WDIR}/usr/bin/
 done
 
 # Install libraries
@@ -133,5 +133,9 @@ cp -r exp ${WDIR}
 mv lib/modules ${WDIR}/lib
 
 rm -f $unsorted
+
+pushd ${WDIR} && find . | cpio -o -H newc | xz --format=lzma > ../upcall-initrd.cpio.xz && popd
+
+rm -rf ${WDIR}
 
 printf "done.\n"

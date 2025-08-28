@@ -31,6 +31,7 @@ CLEANFILES = \
 clean-local:
 	-cd linux && $(MAKE) clean
 	-cd $(PROGRAM) && $(MAKE) clean
+	-rm upcall-initrd.cpio.xz
 	-cd initrd && $(MAKE) clean
 	-find -name config.cache -delete
 
@@ -38,15 +39,18 @@ min-clean: app-clean kern-clean
 
 app-clean:
 	-cd libupcall && $(MAKE) clean
+	-rm upcall-initrd.cpio.xz
 	-rm vmlinuz linux/vmlinux linux/arch/x86/boot/bzImage
 	-cd $(PROGRAM) && $(MAKE) clean
 
 kern-clean:
 	-rm vmlinuz
+	-rm upcall-initrd.cpio.xz
 	-cd initrd && $(MAKE) clean
 	-cd linux && $(MAKE) clean && rm .config
 
 init-clean:
+	-rm vmlinuz linux/vmlinux linux/arch/x86/boot/bzImage
 	-cd initrd && $(MAKE) clean
 
 DIST_SUBDIRS = event-tester
@@ -69,7 +73,7 @@ initrd/perf: linux/tools/perf/perf stamp-linux-dir
 linux/tools/perf/perf: stamp-linux-dir linux/arch/x86/boot/bzImage
 	$(MAKE) -C $(srcdir)/linux/tools perf
 
-vmlinuz: stamp-linux-dir linux/arch/x86/boot/bzImage
+vmlinuz: linux/arch/x86/boot/bzImage stamp-linux-dir
 	cp $< $@
 
 linux/arch/x86/boot/bzImage: stamp-linux-dir linux/.config
@@ -93,7 +97,7 @@ endif
 $(abs_top_builddir)/libupcall/libupcall.a:
 	cd $(abs_top_builddir)/libupcall && $(MAKE) 
 
-$(PROGRAM)/stamp-initrd:
+$(PROGRAM)/stamp-initrd: $(UPCALL_LIB)
 	$(MAKE) -C $(PROGRAM) stamp-initrd
 
 #----------------------------------------------------------------------
@@ -107,8 +111,7 @@ $(PROGRAM)/data.tar.gz: $(UPCALL_LIB)
 # Build the initramfs
 
 noinst_DATA += upcall-initrd.cpio.xz
-# TODO add our application to the initrd
-upcall-initrd.cpio.xz: $(PROGRAM) $(PROGRAM)/stamp-initrd $(PROGRAM)/data.tar.gz vmlinuz initrd/perf
+upcall-initrd.cpio.xz: $(PROGRAM)/stamp-initrd $(PROGRAM)/data.tar.gz vmlinuz initrd/perf
 	cp $(PROGRAM)/data.tar.gz initrd/
 	$(MAKE) -C $(srcdir)/initrd $@
 	cp initrd/$@ $@
@@ -123,7 +126,7 @@ boot: vmlinuz upcall-initrd.cpio.xz
 # Privileged (probably required if the kernel is expecting incoming
 # network connections).
 boot-priv: vmlinuz upcall-initrd.cpio.xz
-	sudo run_net_qemu.sh $^
+	sudo ./run_net_qemu.sh $^
 
 #----------------------------------------------------------------------
 # Maintainers only!

@@ -83,6 +83,8 @@ sleep 5
 
 echo "UPCALL BOOTED"
 
-# Start UKL process
+# Start target process
 @TRIGGER@ ${3}
+
+/bin/bash
 
