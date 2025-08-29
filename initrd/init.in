@@ -43,14 +43,14 @@ if [ -n "${1}" ]; then
 	IP=$1
 	if [ -n "${2}" ]; then
 		MAC=$2
-		INF=`/usr/sbin/ip -o link | awk -F ': ' -vIGNORECASE=1 '!/link\/ieee802\.11/ && /'"$MAC"'/ { print $2 }'`
+		INF=`/usr/bin/ip -o link | awk -F ': ' -vIGNORECASE=1 '!/link\/ieee802\.11/ && /'"$MAC"'/ { print $2 }'`
 	else
 		INF="eth0"
 	fi
-	/usr/sbin/ip address flush dev $INF
-	/usr/sbin/ip address add $IP/24 brd + dev $INF
+	/usr/bin/ip address flush dev $INF
+	/usr/bin/ip address add $IP/24 brd + dev $INF
 	#/usr/sbin/ip link set dev $INF mtu 9000
-	/usr/sbin/ip link set $INF up
+	/usr/bin/ip link set $INF up
 
 	if [ -n "${4}" ]; then
 		# Receive queue affinity has been requested, we will try and create a receive queue per CPU and
@@ -71,10 +71,10 @@ if [ -n "${1}" ]; then
 	fi
 fi
 
-/usr/sbin/ip address
+/usr/bin/ip address
 
 # Run sshd
-/usr/sbin/dropbear -E -R -p 22
+/usr/bin/dropbear -E -R -p 22
 
 # Disable real-time task throttling
 echo -1 > /proc/sys/kernel/sched_rt_runtime_us

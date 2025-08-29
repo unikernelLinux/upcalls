@@ -28,9 +28,9 @@ cp ./perf /usr/sbin/
 binfiles="cat ls mkdir lspci mknod mount bash top touch awk less"
 binfiles="$binfiles umount sed sleep ln rm uname grep nproc"
 binfiles="$binfiles readlink basename chmod ps pidof pgrep pkill"
-binfiles="$binfiles cut netstat"
+binfiles="$binfiles cut netstat ip"
 
-sbinfiles="halt dropbear ip rdmsr wrmsr perf ethtool"
+sbinfiles="rdmsr wrmsr ethtool halt dropbear"
 
 unsorted=$(mktemp /tmp/unsorted.XXXXXXXXXX)
 
