@@ -74,7 +74,7 @@ fi
 /usr/bin/ip address
 
 # Run sshd
-/usr/bin/dropbear -E -R -p 22
+/usr/sbin/dropbear -E -R -p 22
 
 # Disable real-time task throttling
 echo -1 > /proc/sys/kernel/sched_rt_runtime_us
