@@ -97,13 +97,16 @@ static void *park_context(void * my_worker)
 {
 	struct worker *me = (struct worker*)my_worker;
 	struct work_item event;
+	uint64_t dummy = 1;
 
 	// Run the setup function if present
 	if (me->setup_fn)
 		me->setup_fn(me->setup_arg);
 
 	// Register as an event excution context and pause until everyone is ready
-	if (0 != ioctl(me->upfd, UPIOSTSK)) {
+	// Unfortunately, the glibc wrapper doesn't allow us to skip the optional third
+	// argument and it has to be a valid address for this task.
+	if (0 != ioctl(me->upfd, UPIOSTSK, &dummy)) {
 		return NULL;
 	}
 
@@ -127,7 +130,7 @@ static void parse_clusters(size_t num_cpus, int queues, cpu_set_t **clusters)
 	char *comma;
 
 	memset(lead_cpu, -1, queues * sizeof(int));
-	
+
 	for (size_t i = 0; i < num_cpus; i++) {
 		snprintf(cpu, 256, "/sys/devices/system/cpu/cpu%ld/topology/cluster_cpus_list", i);
 		fd = open(cpu, O_RDONLY);
@@ -136,7 +139,7 @@ static void parse_clusters(size_t num_cpus, int queues, cpu_set_t **clusters)
 			fprintf(stderr, "Tried to read '%s'\n", cpu);
 			return;
 		}
-		
+
 		memset(line, 0, 1024);
 		if (read(fd, line, 1023) < 0) {
 			perror("Failed to read\n");
@@ -178,7 +181,7 @@ static void parse_clusters(size_t num_cpus, int queues, cpu_set_t **clusters)
 /**
  * Setup the event handler for execution
  *
- * This funciton must be called prior to registering any events of interest. 
+ * This funciton must be called prior to registering any events of interest.
  * @int concurrency_model The concurrency model to be used, should be from
  *     @enum concurrency_models.
  * @unsigned int thrd_cnt The number of threads, per event queue, to be created
@@ -222,7 +225,7 @@ int init_event_handler(int flags, unsigned int thrd_cnt, void (*setup_fn)(void*)
 			CPU_SET_S(i, CPU_ALLOC_SIZE(num_cpus), clusters[i]);
 		}
 		break;
-		
+
 	case UPCALL_PCACHE:
 		parse_clusters(num_cpus, queues, clusters);
 		break;
