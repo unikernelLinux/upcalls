@@ -126,7 +126,7 @@ boot: vmlinuz upcall-initrd.cpio.xz
 # Privileged (probably required if the kernel is expecting incoming
 # network connections).
 boot-priv: vmlinuz upcall-initrd.cpio.xz
-	sudo ./run_net_qemu.sh $^
+	sudo ./run_net_qemu.sh $^ 2
 
 #----------------------------------------------------------------------
 # Maintainers only!
