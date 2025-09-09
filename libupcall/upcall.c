@@ -190,7 +190,7 @@ static void parse_clusters(size_t num_cpus, int queues, cpu_set_t **clusters)
  *     worker thread before they start waiting for events
  * @return valid fd on success -ERRNO on error.
  */
-int init_event_handler(int flags, unsigned int thrd_cnt, void (*setup_fn)(void*), void *setup_arg)
+int init_event_handler(int flags, unsigned int thrd_cnt, int *upfd, void (*setup_fn)(void*), void *setup_arg)
 {
 	pthread_attr_t attrs;
 	cpu_set_t *event_cpu;
@@ -214,6 +214,9 @@ int init_event_handler(int flags, unsigned int thrd_cnt, void (*setup_fn)(void*)
 		ret = -errno;
 		goto out_close;
 	}
+
+	if (upfd)
+		*upfd = fd;
 
 	clusters = calloc(queues, sizeof(cpu_set_t *));
 

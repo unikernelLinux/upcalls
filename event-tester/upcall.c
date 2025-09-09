@@ -209,7 +209,10 @@ static void worker_setup(void *arg)
 		exit(1);
 	}
 
-	register_event(upfd, me->listen_sock, UPCALLIN, on_accept, (void *)(uint64_t)me->listen_sock);
+	if (register_event(upfd, me->listen_sock, UPCALLIN, on_accept, (void *)(uint64_t)me->listen_sock)) {
+		perror("register accept event:");
+		exit(1);
+	}
 
 	setup_perf(me->perf_fds, me->perf_ids, me->index);
 
@@ -224,7 +227,7 @@ void init_threads(uint64_t nr_cpus)
 	pthread_attr_init(&attrs);
 	pthread_attr_setdetachstate(&attrs, PTHREAD_CREATE_DETACHED);
 
-	upfd = init_event_handler(UPCALL_PCPU, 1, worker_setup, NULL);
+	upfd = init_event_handler(UPCALL_PCPU, 1, &upfd, worker_setup, NULL);
 	if (upfd < 0) {
 		printf("Event Handler setup failed\n");
 		exit(1);
