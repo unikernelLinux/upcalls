@@ -28,6 +28,7 @@
 extern __thread struct worker_thread *me;
 extern __thread struct buffer_cache *msg_cache;
 extern __thread struct buffer_cache *conn_cache;
+__thread struct buffer_cache *info_cache;
 extern struct worker_thread **threads;
 extern struct connection **conns;
 extern size_t init_count;
@@ -49,39 +50,48 @@ enum io_types {
 };
 
 struct req_info {
+	void *to_free;
 	uint32_t fd;
 	uint16_t type;
-	void *to_free;
+	uint16_t pad;
 };
 
 static void add_accept_request(int server_socket, struct sockaddr_in *client_addr,
 				socklen_t *client_addr_len)
 {
 	struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-	struct req_info info = { .fd = server_socket, .type = ACCEPT, .to_free = NULL };
+	struct req_info *info = cache_alloc(info_cache, me->index);
+	info->fd = server_socket;
+	info->type = ACCEPT;
+	info->to_free = NULL;
 	io_uring_prep_accept(sqe, server_socket, (struct sockaddr *) client_addr,
 				client_addr_len, 0);
-	memcpy(&sqe->user_data, &info, sizeof(info));
+	io_uring_sqe_set_data(sqe, info);
 }
 
 static void add_read_request(int fd, void *buf, size_t len, uint16_t type)
 {
 	struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-	struct req_info info = { .fd = fd, .type = type, .to_free = NULL };
+	struct req_info *info = cache_alloc(info_cache, me->index);
+	info->fd = fd;
+	info->type = type;
+	info->to_free = NULL;
 	io_uring_prep_read(sqe, fd, buf, len, 0);
-	memcpy(&sqe->user_data, &info, sizeof(info));
+	io_uring_sqe_set_data(sqe, info);
 }
 
 static void add_write_request(int fd, void *buf, size_t len, uint16_t type, int free_buf)
 {
 	struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-	struct req_info info = { .fd = fd, .type = type };
+	struct req_info *info = cache_alloc(info_cache, me->index);
+	info->fd = fd;
+	info->type = type;
 	if (free_buf)
-		info.to_free = buf;
+		info->to_free = buf;
 	else
-		info.to_free = NULL;
+		info->to_free = NULL;
 	io_uring_prep_write(sqe, fd, buf, len, 0);
-	memcpy(&sqe->user_data, &info, sizeof(info));
+	io_uring_sqe_set_data(sqe, info);
 }
 
 void on_close(void *arg)
@@ -128,6 +138,12 @@ static void *worker_func(void *arg)
 
 	msg_cache = init_cache(msg_size, 1024, me->index);
 	if (!msg_cache) {
+		perror("OOM");
+		exit(1);
+	}
+
+	info_cache = init_cache(sizeof(struct req_info), 2048, me->index);
+	if (!info_cache) {
 		perror("OOM");
 		exit(1);
 	}
@@ -208,7 +224,8 @@ static void *worker_func(void *arg)
 			int ret;
 			struct waiting_conn *newbie;
 			count++;
-			memcpy(&info, &cqe->user_data, sizeof(info));
+			memcpy(&info, (void *)cqe->user_data, sizeof(info));
+			cache_free(info_cache, (void *)cqe->user_data, me->index);
 
 			switch (info.type) {
 			case ACCEPT:
