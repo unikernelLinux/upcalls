@@ -331,6 +331,7 @@ static void *worker_func(void *arg)
 void init_threads(uint64_t nr_cpus)
 {
 	pthread_attr_t attrs;
+	pthread_t dummy;
 	cpu_set_t *worker_cpu;
 
 	worker_cpu = CPU_ALLOC(nr_cpus);
