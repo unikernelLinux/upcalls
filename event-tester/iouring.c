@@ -116,7 +116,6 @@ static void *worker_func(void *arg)
 
 	// Do our setup
 	me->index = my_cpu;
-	printf("Worker %lu starting\n", my_cpu);
 
 	threads[my_cpu] = me;
 	me->event_fd = eventfd(0, 0);
@@ -139,7 +138,7 @@ static void *worker_func(void *arg)
 		exit(1);
 	}
 
-	
+
         me->listen_sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	if (me->listen_sock < 0) {
 		perror("socket():");
@@ -181,12 +180,10 @@ static void *worker_func(void *arg)
 
 	add_accept_request(me->listen_sock, &client_addr, &client_addr_len);
 	add_read_request(me->event_fd, &ev_cause, cause_size, EV_READ);
-	printf("Worker %lu notifying\n", my_cpu);
 
 	// Notify that setup is done
 	pthread_mutex_lock(&init_lock);
 	init_count++;
-	printf("Worker %lu setup done\n", init_count);
 	pthread_cond_signal(&init_cond);
 	pthread_mutex_unlock(&init_lock);
 	pthread_mutex_lock(&worker_hang_lock);
@@ -331,16 +328,9 @@ static void *worker_func(void *arg)
 	}
 }
 
-void *dummy_worker(void *arg)
-{
-	printf("Dummy thread done\n");
-	return arg;
-}
-
 void init_threads(uint64_t nr_cpus)
 {
 	pthread_attr_t attrs;
-	pthread_t dummy;
 	cpu_set_t *worker_cpu;
 
 	worker_cpu = CPU_ALLOC(nr_cpus);
@@ -356,9 +346,6 @@ void init_threads(uint64_t nr_cpus)
 
 	pthread_mutex_lock(&worker_hang_lock);
 
-	printf("Starting dummy\n");
-	pthread_create(&dummy, &attrs, dummy_worker, NULL);
-
 	for (uint64_t i = 0; i < nr_cpus; i++) {
 		CPU_ZERO_S(CPU_ALLOC_SIZE(nr_cpus), worker_cpu);
 		CPU_SET_S(i, CPU_ALLOC_SIZE(nr_cpus), worker_cpu);
@@ -373,7 +360,6 @@ void init_threads(uint64_t nr_cpus)
 		}
 
 	}
-	printf("Created workers\n");
 
 	CPU_FREE(worker_cpu);
 
@@ -381,7 +367,6 @@ void init_threads(uint64_t nr_cpus)
 	while (init_count < nr_cpus) {
 		pthread_cond_wait(&init_cond, &init_lock);
 	}
-	printf("Init done\n");
 	pthread_mutex_unlock(&init_lock);
 	pthread_mutex_unlock(&worker_hang_lock);
 }
