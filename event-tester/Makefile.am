@@ -59,7 +59,7 @@ tcp_client: tcp_client.c echo_defs.h tsc_logger.h
 	gcc -o $@ $< -ggdb -Wall -Werror -lpthread
 
 tcp_echo: tcp_echo.c $(EV_SYS).c tsc_logger.h echo_defs.h $(UPCALL_LIB) $(SYS_LIB)
-	gcc -o $@ tcp_echo.c $(EV_SYS).c $(UPCALL_LIB) $(SYS_LIB) -ggdb -Wall -Werror -lpthread
+	gcc $(AM_CFLAGS) -o $@ tcp_echo.c $(EV_SYS).c $(UPCALL_LIB) $(SYS_LIB) -ggdb -Wall -Werror -lpthread
 
 all: tcp_client tcp_echo
 
