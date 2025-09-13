@@ -52,7 +52,7 @@ liburing.a: stamp-liburing-dir
 	rm -f $@
 	cd liburing && \
 	./configure && \
-	CFLAGS='-O3 -Wall -Wextra -fno-stack-protector $(AM_CFLAGS)' ENABLE_SHARED=0 make -j`nproc`
+	CFLAGS='-Wall -Wextra -fno-stack-protector' ENABLE_SHARED=0 make -j`nproc`
 	mv liburing/src/liburing.a $@
 
 tcp_client: tcp_client.c echo_defs.h tsc_logger.h

@@ -186,7 +186,7 @@ static void *worker_func(void *arg)
 	// Notify that setup is done
 	pthread_mutex_lock(&init_lock);
 	init_count++;
-	printf("Worker %d setup done\n", init_count);
+	printf("Worker %lu setup done\n", init_count);
 	pthread_cond_signal(&init_cond);
 	pthread_mutex_unlock(&init_lock);
 	pthread_mutex_lock(&worker_hang_lock);
