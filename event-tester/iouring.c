@@ -310,9 +310,12 @@ static void *worker_func(void *arg)
 						conn->buffer = cache_alloc(msg_cache, me->index);
 
 					add_read_request(conn->fd, conn->buffer, msg_size, SOCK_READ);
+					add_read_request(me->event_fd, &ev_cause, cause_size, EV_READ);
+
 					pthread_mutex_lock(&me->incoming.lock);
 				}
 				pthread_mutex_unlock(&me->incoming.lock);
+
 				break;
 
 			case SOCK_WRITE:
