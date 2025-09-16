@@ -24,8 +24,10 @@ upcall-initrd
 initrd/lib/
 tcp_echo
 tcp_client
-upcall-initrd.cpio.xz
+*.cpio.xz
 event-tester/stamp-initrd
+event-tester/liburing
+event-tester/stamp-liburing-dir
 
 # Prerequisites
 *.d
