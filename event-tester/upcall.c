@@ -100,7 +100,7 @@ void on_read(void *arg)
 	if (conn->fd < 0)
 		return; 
 		
-	pthread_mutex_lock(&conn->lock);
+	//pthread_mutex_lock(&conn->lock);
 		
 	if (!conn->buffer) {
 		conn->buffer = cache_alloc(msg_cache, me->index);
@@ -149,13 +149,14 @@ void on_read(void *arg)
 	} while (cursor < msg_size);
 	conn->state = READING;
 out_unlock:
-	pthread_mutex_unlock(&conn->lock);
+	//pthread_mutex_unlock(&conn->lock);
 }
 
 
 static void worker_setup(void *arg)
 {
 	int i = 1;
+	struct sched_param mine;
 
 	me = calloc(1, sizeof(struct worker_thread));
 	if (!me) {
@@ -214,6 +215,13 @@ static void worker_setup(void *arg)
 		exit(1);
 	}
 
+	memset(&mine, 0, sizeof(mine));
+	mine.sched_priority = 1;
+	if (sched_setscheduler(0, SCHED_RR, &mine)) {
+		perror("sched_setscheduler:");
+		exit(1);
+	}
+
 	setup_perf(me->perf_fds, me->perf_ids, me->index);
 
 	ioctl(me->perf_fds[0], PERF_EVENT_IOC_RESET, 0);
@@ -227,7 +235,7 @@ void init_threads(uint64_t nr_cpus)
 	pthread_attr_init(&attrs);
 	pthread_attr_setdetachstate(&attrs, PTHREAD_CREATE_DETACHED);
 
-	upfd = init_event_handler(UPCALL_PCPU, 1, &upfd, worker_setup, NULL);
+	upfd = init_event_handler(UPCALL_PCPU, 2, &upfd, worker_setup, NULL);
 	if (upfd < 0) {
 		printf("Event Handler setup failed\n");
 		exit(1);
@@ -237,11 +245,11 @@ void init_threads(uint64_t nr_cpus)
 void on_close(void *arg)
 {
 	int closed_fd;
-	int failed_lock = 0;
+	//int failed_lock = 0;
 	struct connection *conn = (struct connection *)arg;
 
-	if (pthread_mutex_lock(&conn->lock))
-		failed_lock = 1;
+	//if (pthread_mutex_lock(&conn->lock))
+		//failed_lock = 1;
 
 	closed_fd = conn->fd;
 	conn->fd = -1;
@@ -253,18 +261,18 @@ void on_close(void *arg)
 		conn->state = CLOSING;
 		close(closed_fd);
 
-		if (!failed_lock)
-			pthread_mutex_unlock(&conn->lock);
+		//if (!failed_lock)
+			//pthread_mutex_unlock(&conn->lock);
 
 		// In case the lock was acquired here, we need to make sure we can destroy it
-		while (!failed_lock && pthread_mutex_destroy(&conn->lock))
-			continue;
+		//while (!failed_lock && pthread_mutex_destroy(&conn->lock))
+			//continue;
 
 		cache_free(msg_cache, conn->buffer, me->index);
 		cache_free(conn_cache, conn, me->index);
 		me->conn_count++;
-	} else if (!failed_lock) {
-		pthread_mutex_unlock(&conn->lock);
+	//} else if (!failed_lock) {
+		//pthread_mutex_unlock(&conn->lock);
 	}
 
 }
