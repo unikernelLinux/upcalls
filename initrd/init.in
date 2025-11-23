@@ -32,6 +32,8 @@ ln -sf /proc/mounts /etc/mtab
 echo "CMDLINE" >> /log
 cat /proc/cmdline >> /log
 
+ulimit -n 200000
+
 # Running experimental setup scripts
 echo "Running Setup scripts" >> /log
 ./exp/disable_ht.sh >> /log

@@ -28,9 +28,9 @@ cp ./perf /usr/sbin/
 binfiles="cat ls mkdir lspci mknod mount bash top touch awk less"
 binfiles="$binfiles umount sed sleep ln rm uname grep nproc"
 binfiles="$binfiles readlink basename chmod ps pidof pgrep pkill"
-binfiles="$binfiles cut netstat ip"
+binfiles="$binfiles cut netstat ip kmod"
 
-sbinfiles="rdmsr wrmsr ethtool halt dropbear"
+sbinfiles="modprobe rmmod rdmsr wrmsr ethtool halt dropbear"
 
 unsorted=$(mktemp /tmp/unsorted.XXXXXXXXXX)
 
@@ -115,7 +115,7 @@ mkdir -p ${WDIR}/usr/share
 cp -r /usr/share/terminfo ${WDIR}/usr/share
 
 conf="bash.bashrc bash_completion.d group hosts passwd profile"
-conf="$conf shells shadow"
+conf="$conf shells shadow security"
 for f in $conf ; do
   cp -r /etc/$f ${WDIR}/etc/$f
 done
