@@ -64,9 +64,9 @@ static int upcall_ctl(int upfd, int op, int fd, __poll_t events, struct work_ite
 	return syscall(SYS_upcall_ctl, upfd, op, fd, events, action);
 }
 
-static int upcall_wait(int upfd, struct work_item *work)
+static int upcall_wait(int upfd, int count, struct work_item *work)
 {
-	return syscall(SYS_upcall_wait, upfd, work);
+	return syscall(SYS_upcall_wait, upfd, count, work);
 }
 
 struct worker {
@@ -93,11 +93,16 @@ static void wait_for_setup()
 	pthread_mutex_unlock(&setup_lock);
 }
 
+#ifndef UPCALL_BACKLOG
+#define UPCALL_BACKLOG 20
+#endif
+
 static void *park_context(void * my_worker)
 {
 	struct worker *me = (struct worker*)my_worker;
-	struct work_item event;
+	struct work_item event[UPCALL_BACKLOG];
 	uint64_t dummy = 1;
+	int count;
 
 	// Run the setup function if present
 	if (me->setup_fn)
@@ -113,8 +118,13 @@ static void *park_context(void * my_worker)
 	wait_for_setup();
 
 	while (!me->dying) {
-		if(!upcall_wait(me->upfd, &event))
-			event.work_fn(event.arg);
+		memset(event, 0, UPCALL_BACKLOG * sizeof(struct work_item));
+
+		count = upcall_wait(me->upfd, UPCALL_BACKLOG, event);
+
+		for (int i = 0; i < count; i++) {
+			event[i].work_fn(event[i].arg);
+		}
 	}
 
 	return NULL;
