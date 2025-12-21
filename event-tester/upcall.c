@@ -25,9 +25,12 @@
 
 #include "../libupcall/upcall.h"
 
+#define EVTS 10
+
 extern __thread struct worker_thread *me;
 extern __thread struct buffer_cache *msg_cache;
 extern __thread struct buffer_cache *conn_cache;
+static __thread struct up_event send[EVTS], recieve[2 * EVTS];
 extern struct connection **conns;
 extern struct worker_thread **threads;
 extern size_t nr_cpus;
@@ -39,20 +42,11 @@ static int upfd;
 
 struct connection *new_conn(int fd);
 
-void on_accept(void *arg)
+void on_accept(struct up_event *arg)
 {
-	uint64_t in = (uint64_t)arg;
-	int listen_sock;
+	int listen_sock = arg->fd;
 	int incoming;
 	struct connection *new;
-
-	if (in > INT_MAX) {
-		// We shouldn't get here
-		printf("Invalid listen_sock\n");
-		exit(1);
-	}
-
-	listen_sock = (int)in;
 
 	while (1) {
 		if ((incoming = accept4(listen_sock, NULL, NULL, SOCK_NONBLOCK)) < 0) {
@@ -78,37 +72,27 @@ void on_accept(void *arg)
 		conns[incoming] = new;
 		new->state = WAITING;
 
-		// Register for read events and then hang up
-		if (register_event(upfd, incoming, UPCALLIN, on_read, new)) {
-			printf("OOM\n");
-			exit(1);
+		if (!new->buffer) {
+			new->buffer = cache_alloc(msg_cache, me->index);
+			if (!new->buffer) {
+				perror("Malloc on read");
+				exit(1);
+			}
 		}
 
-		if (register_event(upfd, incoming, UPCALLHUP, on_close, new)) {
-			printf("OOM\n");
-			exit(1);
-		}
+		// Register our first read
 	}
 }
 
-void on_read(void *arg)
+void on_read(struct up_event *arg)
 {
-	struct connection *conn = (struct connection*)arg;
+	struct connection *conn = conns[arg->fd];
 	ssize_t ret;
 	size_t cursor;
 	 
 	if (conn->fd < 0)
 		return; 
 		
-	pthread_mutex_lock(&conn->lock);
-		
-	if (!conn->buffer) {
-		conn->buffer = cache_alloc(msg_cache, me->index);
-		if (!conn->buffer) {
-			perror("Malloc on read");
-			exit(1);
-		}
-	}
 	
 	conn->event_count++;
 		
@@ -148,8 +132,6 @@ void on_read(void *arg)
 		cursor += ret;
 	} while (cursor < msg_size);
 	conn->state = READING;
-out_unlock:
-	pthread_mutex_unlock(&conn->lock);
 }
 
 

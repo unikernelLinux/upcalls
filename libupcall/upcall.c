@@ -46,27 +46,19 @@
 #define SYS_upcall_create 468
 #endif
 
-#ifndef SYS_upcall_ctl
-#define SYS_upcall_ctl 469
+#ifndef SYS_upcall_submit
+#define SYS_upcall_submit 469
 #endif
 
-#ifndef SYS_upcall_wait
-#define SYS_upcall_wait 470
-#endif
-
-static int upcall_create(int flags)
+extern int upcall_create(int flags)
 {
 	return syscall(SYS_upcall_create, flags);
 }
 
-static int upcall_ctl(int upfd, int op, int fd, __poll_t events, struct work_item *action)
+extern int upcall_submit(int upfd, int in_cnt, struct up_event *in,
+		int out_cnt, struct up_event *out)
 {
-	return syscall(SYS_upcall_ctl, upfd, op, fd, events, action);
-}
-
-static int upcall_wait(int upfd, int count, struct work_item *work)
-{
-	return syscall(SYS_upcall_wait, upfd, count, work);
+	return syscall(SYS_upcall_submit, upfd, in_cnt, in, out_cnt, out);
 }
 
 struct worker {
@@ -107,13 +99,6 @@ static void *park_context(void * my_worker)
 	// Run the setup function if present
 	if (me->setup_fn)
 		me->setup_fn(me->setup_arg);
-
-	// Register as an event excution context and pause until everyone is ready
-	// Unfortunately, the glibc wrapper doesn't allow us to skip the optional third
-	// argument and it has to be a valid address for this task.
-	if (0 != ioctl(me->upfd, UPIOSTSK, &dummy)) {
-		return NULL;
-	}
 
 	wait_for_setup();
 
