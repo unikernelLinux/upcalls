@@ -24,14 +24,14 @@ EXTRA_DIST = \
 CLEANFILES = \
 	*~ *.o *.a \
 	stamp-h1 \
-	upcall-initrd.cpio.xz \
+	upcall-initrd.cpio.gz \
 	linux/.config \
 	vmlinuz
 
 clean-local:
 	-cd linux && $(MAKE) clean
 	-cd $(PROGRAM) && $(MAKE) clean
-	-rm upcall-initrd.cpio.xz
+	-rm upcall-initrd.cpio.gz
 	-cd initrd && $(MAKE) clean
 	-find -name config.cache -delete
 
@@ -39,13 +39,13 @@ min-clean: app-clean kern-clean
 
 app-clean:
 	-cd libupcall && $(MAKE) clean
-	-rm upcall-initrd.cpio.xz
+	-rm upcall-initrd.cpio.gz
 	-rm vmlinuz linux/vmlinux linux/arch/x86/boot/bzImage
 	-cd $(PROGRAM) && $(MAKE) clean
 
 kern-clean:
 	-rm vmlinuz
-	-rm upcall-initrd.cpio.xz
+	-rm upcall-initrd.cpio.gz
 	-cd initrd && $(MAKE) clean
 	-cd linux && $(MAKE) clean && rm .config
 
@@ -110,8 +110,8 @@ $(PROGRAM)/data.tar.gz: $(UPCALL_LIB)
 #----------------------------------------------------------------------
 # Build the initramfs
 
-noinst_DATA += upcall-initrd.cpio.xz
-upcall-initrd.cpio.xz: $(PROGRAM)/stamp-initrd $(PROGRAM)/data.tar.gz vmlinuz initrd/perf
+noinst_DATA += upcall-initrd.cpio.gz
+upcall-initrd.cpio.gz: $(PROGRAM)/stamp-initrd $(PROGRAM)/data.tar.gz vmlinuz initrd/perf
 	cp $(PROGRAM)/data.tar.gz initrd/
 	$(MAKE) -C $(srcdir)/initrd $@
 	cp initrd/$@ $@
@@ -120,12 +120,12 @@ upcall-initrd.cpio.xz: $(PROGRAM)/stamp-initrd $(PROGRAM)/data.tar.gz vmlinuz in
 # Boot the under qemu.
 
 # Non-privileged:
-boot: vmlinuz upcall-initrd.cpio.xz
+boot: vmlinuz upcall-initrd.cpio.gz
 	./run_qemu.sh $^
 
 # Privileged (probably required if the kernel is expecting incoming
 # network connections).
-boot-priv: vmlinuz upcall-initrd.cpio.xz
+boot-priv: vmlinuz upcall-initrd.cpio.gz
 	sudo ./run_net_qemu.sh $^ 2
 
 #----------------------------------------------------------------------

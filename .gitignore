@@ -25,6 +25,7 @@ initrd/lib/
 tcp_echo
 tcp_client
 *.cpio.xz
+*.cpio.gz
 event-tester/stamp-initrd
 event-tester/liburing
 event-tester/stamp-liburing-dir

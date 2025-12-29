@@ -35,7 +35,7 @@ struct up_event {
 	int32_t		result;
 	void		*buf;
 	uint64_t	len;
-	void		(*work_fn)(struct up_event *arg);
+	void		(*work_fn)(void *arg);
 } __attribute__((packed));
 
 #define UPIOGQCNT       0x00000001

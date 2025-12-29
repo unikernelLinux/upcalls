@@ -122,6 +122,7 @@ done
 
 if [ -z "$2" -a -s "$2" ] ; then
 	cp $2 ${WDIR}/usr/bin/
+	chmod 755 ${WDIR}/usr/bin/${2}
 fi
 
 if [ -s data.tar.gz ] ; then
@@ -134,7 +135,7 @@ mv lib/modules ${WDIR}/lib
 
 rm -f $unsorted
 
-pushd ${WDIR} && find . | cpio -o -H newc | xz --format=lzma > ../upcall-initrd.cpio.xz && popd
+pushd ${WDIR} && find . | cpio -o -H newc | gzip > ../upcall-initrd.cpio.gz && popd
 
 rm -rf ${WDIR}
 
