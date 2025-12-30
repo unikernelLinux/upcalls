@@ -294,8 +294,6 @@ static void *worker_setup(void *arg)
 		work_cnt = 0;
 
 		for (int i = 0; i < ret; i++) {
-					receive[i].fd, receive[i].result, receive[i].work_fn, receive[i].buf,
-					receive[i].len);
 			if (receive[i].work_fn)
 				receive[i].work_fn(&receive[i]);
 		}
