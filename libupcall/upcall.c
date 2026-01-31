@@ -20,7 +20,7 @@
 /**
  *
  * This is a consolidation of the code needed to interact with the upcall
- * mechanism found in UKL. We have the event loop where we park execution
+ * event mechanism. We have the event loop where we park execution
  * contexts when they are not in use, the API for setiing up the system, and
  * an API for adding and removing event subscriptions.
  */
@@ -50,6 +50,8 @@
 #define SYS_upcall_submit 469
 #endif
 
+#define EVTS 4
+
 extern int upcall_create(int flags)
 {
 	return syscall(SYS_upcall_create, flags);
@@ -61,84 +63,122 @@ extern int upcall_submit(int upfd, int in_cnt, struct up_event *in,
 	return syscall(SYS_upcall_submit, upfd, in_cnt, in, out_cnt, out);
 }
 
-struct worker {
-	int dying;
-	int upfd;
-	pthread_t me;
-	void (*setup_fn)(void *);
-	void * setup_arg;
-};
+static __thread struct up_event *work;
+static __thread int work_cnt;                                                                                                                                          
+static __thread int work_max;
+static __thread struct up_event *receive;
+static __thread int recv_cnt;
+static __thread struct iovec *buffers;
+static __thread int buf_cnt;
+static __thread int buf_max;
 
-static unsigned long setup_count;
-
-static struct worker *workers;
-
-static pthread_cond_t setup_cond = PTHREAD_COND_INITIALIZER;
-static pthread_mutex_t setup_lock = PTHREAD_MUTEX_INITIALIZER;
-
-static void wait_for_setup()
+static void expand_queue(void)
 {
-	pthread_mutex_lock(&setup_lock);
-	setup_count++;
-	while (setup_count)
-		pthread_cond_wait(&setup_cond, &setup_lock);
-	pthread_mutex_unlock(&setup_lock);
-}
-
-extern void parse_clusters(size_t num_cpus, int queues, cpu_set_t **clusters)
-{
-	int lead_cpu[queues];
-	int next_cluster = 0;
-	char cpu[256] = {0};
-	char line[1024];
-	int entry, fd;
-	char *comma;
-
-	memset(lead_cpu, -1, queues * sizeof(int));
-
-	for (size_t i = 0; i < num_cpus; i++) {
-		snprintf(cpu, 256, "/sys/devices/system/cpu/cpu%ld/topology/cluster_cpus_list", i);
-		fd = open(cpu, O_RDONLY);
-		if (fd < 0) {
-			perror("Failed to open cluster_cpus_list for reading\n");
-			fprintf(stderr, "Tried to read '%s'\n", cpu);
-			return;
-		}
-
-		memset(line, 0, 1024);
-		if (read(fd, line, 1023) < 0) {
-			perror("Failed to read\n");
-			close(fd);
-			return;
-		}
-		close(fd);
-
-		entry = strtol(line, NULL, 10);
-		if (entry == i) {
-			if (next_cluster >= queues) {
-				// Yikes
-				fprintf(stderr, "We think there should be more clusters than exist\n");
-				return;
-			}
-
-			lead_cpu[next_cluster] = i;
-			clusters[next_cluster] = CPU_ALLOC(num_cpus);
-			CPU_ZERO_S(CPU_ALLOC_SIZE(num_cpus), clusters[next_cluster]);
-			CPU_SET_S(i, CPU_ALLOC_SIZE(num_cpus), clusters[next_cluster]);
-			next_cluster++;
-		} else {
-			int my_cluster;
-			for (my_cluster = 0; my_cluster < next_cluster; my_cluster++) {
-				if (lead_cpu[my_cluster] == entry)
-					break;
-			}
-
-			if (my_cluster >= next_cluster) {
-				fprintf(stderr, "Failed to find a cluster for %ld\n", i);
-				exit(1);
-			}
-
-			CPU_SET_S(i, CPU_ALLOC_SIZE(num_cpus), clusters[my_cluster]);
-		}
+	work_max += EVTS;
+	work = realloc(work, work_max * sizeof(struct up_event));
+	if (!work) {
+		perror("OOM");
+		exit(1);
 	}
 }
+
+static void add_buffers(struct iovec *bufs, size_t cnt)
+{
+	if (work_cnt == work_max)
+		expand_queue();
+
+	memset(&work[work_cnt], 0, sizeof(struct up_event));
+	work[work_cnt].type = UP_VEC;
+	work[work_cnt].buf = (void *)bufs;
+	work[work_cnt].len = cnt;
+	work_cnt++;
+}
+
+void return_buffer(void *buf, size_t len)
+{
+	buffers[buf_cnt].iov_base = buf;
+	buffers[buf_cnt].iov_len = len;
+	buf_cnt++;
+}
+
+void upcall_worker_setup(int upfd, size_t bufs, size_t buf_sz)
+{
+	work_max = 4 * EVTS;
+	recv_cnt = EVTS;
+	work_cnt = 0;
+
+	work = calloc(work_max, sizeof(struct up_event));
+	if (!work) {
+		perror("OOM");
+		exit(1);
+	}
+
+	receive = calloc(recv_cnt, sizeof(struct up_event));
+	if (!receive) {
+		perror("OOM");
+		exit(1);
+	}
+
+	buffers = calloc(bufs, sizeof(struct iovec));
+	if (!buffers) {
+		perror("OOM");
+		exit(1);
+	}
+	buf_max = bufs;
+	for (buf_cnt = 0; buf_cnt < buf_max; buf_cnt++) {
+		buffers[buf_cnt].iov_len = buf_sz;
+		buffers[buf_cnt].iov_base = calloc(1, buf_sz);
+		if (!buffers[buf_cnt].iov_base) {
+			perror("OOM");
+			exit(1);
+		}
+	}
+
+	add_buffers(buffers, buf_cnt);
+}
+
+void add_read(int fd, void (*work_fn)(struct up_event *evt))
+{
+	if (work_cnt == work_max)
+		expand_queue();
+
+	memset(&work[work_cnt], 0, sizeof(struct up_event));
+	work[work_cnt].fd = fd;
+	work[work_cnt].type = UP_READ;
+	work[work_cnt].work_fn = work_fn;
+	work_cnt++;
+}
+
+void add_accept(int fd, void (*work_fn)(struct up_event *evt))
+{
+	if (work_cnt == work_max)
+		expand_queue();
+	
+	work[work_cnt].fd = fd;
+	work[work_cnt].type = UP_ACCEPT;
+	work[work_cnt].work_fn = work_fn;
+	work_cnt++;
+}
+
+void run_event_loop(int upfd, int continuous)
+{
+	int ret;
+
+	do {
+		if (buf_cnt > 0) 
+			add_buffers(buffers, buf_cnt);
+		ret = upcall_submit(upfd, work_cnt, work, recv_cnt, receive);
+		if (ret < 0) {
+			perror("upcall_submit failed");
+			exit(1);
+		}
+
+		buf_cnt = 0;
+		work_cnt = 0;
+		for (int i = 0; i < ret; i++) {
+			receive[i].work_fn(&receive[i]);
+		}
+		memset(receive, 0, recv_cnt * sizeof(struct up_event));
+	} while(continuous);
+}
+

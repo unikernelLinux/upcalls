@@ -53,7 +53,7 @@ init-clean:
 	-rm vmlinuz linux/vmlinux linux/arch/x86/boot/bzImage
 	-cd initrd && $(MAKE) clean
 
-DIST_SUBDIRS = event-tester
+DIST_SUBDIRS = event-tester libupcall
 
 #----------------------------------------------------------------------
 # Build Linux kernel

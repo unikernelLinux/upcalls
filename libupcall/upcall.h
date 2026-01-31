@@ -29,21 +29,34 @@
 #define UPCALL_H_
 
 #include <fcntl.h>
+#include <sys/uio.h>
+
+typedef enum {
+	UP_READ,	// Requesting a read of the fd
+	UP_ACCEPT,	// Requesting an accept4 on the fd (will imply SOCK_NONBLOCK)
+	UP_VEC,		// Give the struct iovec array at buf with len items to the kernel
+	NR_ACTIONS	// Error checking
+} up_action_t;
 
 struct up_event {
 	int32_t		fd;
 	int32_t		result;
 	void		*buf;
 	uint64_t	len;
-	void		(*work_fn)(void *arg);
+	void		(*work_fn)(struct up_event *arg);
+	union {
+		up_action_t	type;
+		uint64_t	pad;
+	};
 } __attribute__((packed));
 
 #define UPIOGQCNT       0x00000001
+#define UPWRKINIT	0x00000002
 
 #define UPCALL_PCPU             0x00010000
 #define UPCALL_PCACHE           0x00020000
 #define UPCALL_SINGLE           0x00040000
-#define UPCALL_MODEL_MASK       0x00070000
+#define UPCALL_MODEL_MASK       (UPCALL_PCPU | UPCALL_PCACHE | UPCALL_SINGLE)
 #define UPCALL_MASK             (O_CLOEXEC | UPCALL_MODEL_MASK)
 
 typedef unsigned __poll_t;
@@ -52,5 +65,15 @@ int upcall_create(int flags);
 
 int upcall_submit(int upfd, int in_cnt, struct up_event *in,
 		int out_cnt, struct up_event *out);
+
+void return_buffer(void *buf, size_t len);
+
+void add_read(int fd, void (*work_fn)(struct up_event *evt));
+
+void add_accept(int fd, void (*work_fn)(struct up_event *evt));
+
+void upcall_worker_setup(int upfd, size_t buf_cnt, size_t buf_sz);
+
+void run_event_loop(int upfd, int continuous);
 
 #endif

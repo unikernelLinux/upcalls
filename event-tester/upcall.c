@@ -25,20 +25,19 @@
 
 #include "../libupcall/upcall.h"
 
-#define EVTS 10
+#define EVTS 2
 
 #ifndef FLAGS
-#define FLAGS UPCALL_PCPU
+#define FLAGS UPCALL_PCACHE
+#endif
+
+#ifndef BUF_COUNT
+#define BUF_COUNT 128
 #endif
 
 extern __thread struct worker_thread *me;
 extern __thread struct buffer_cache *msg_cache;
 extern __thread struct buffer_cache *conn_cache;
-static __thread struct up_event *work;
-static __thread int work_cnt;
-static __thread int work_max;
-static __thread struct up_event *receive;
-static __thread int recv_cnt;
 extern struct connection **conns;
 extern struct worker_thread **threads;
 extern size_t nr_cpus;
@@ -54,88 +53,44 @@ static int upfd;
 
 struct connection *new_conn(int fd);
 
-static void add_read(int fd, void *buf, uint64_t len);
-static void add_accept(int fd);
+void my_read(struct up_event *arg);
 
-void on_accept(void *v)
+void my_accept(struct up_event *arg)
 {
-	struct up_event *arg = (struct up_event *)v;
-	int listen_sock = arg->fd;
-	int incoming;
+	int incoming = arg->result;
 	struct connection *new;
 
-	while (1) {
-		if ((incoming = accept4(listen_sock, NULL, NULL, SOCK_NONBLOCK)) < 0) {
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				// We exhausted the incoming queue
-				add_accept(listen_sock);
-				return;
-			}
-			perror("accept4:");
-			// It is likely that we exhausted the number of file descriptors here, dump some per thread stats
-			for (size_t i = 0; i < nr_cpus; i++) {
-				printf("Thread %ld accept count %ld close count %ld\n", i, threads[i]->accept_count, threads[i]->conn_count);
-			}
+	me->accept_count++;
 
-			exit(1);
-		}
+	new = new_conn(incoming);
+	if (!new)
+		exit(1);
 
-		me->accept_count++;
+	conns[incoming] = new;
+	new->state = WAITING;
 
-		new = new_conn(incoming);
-		if (!new)
-			exit(1);
-
-		conns[incoming] = new;
-		new->state = WAITING;
-
+	if (!new->buffer) {
+		new->buffer = cache_alloc(msg_cache, me->index);
 		if (!new->buffer) {
-			new->buffer = cache_alloc(msg_cache, me->index);
-			if (!new->buffer) {
-				perror("Malloc on read");
-				exit(1);
-			}
+			perror("Malloc on read");
+			exit(1);
 		}
-
-		// Register our first read
-		add_read(new->fd, new->buffer, msg_size);
 	}
+
+	// Register our first read
+	add_read(new->fd, my_read);
+	add_accept(arg->fd, my_accept);
 }
 
-void on_read(void *v)
+static void  my_write(int fd, uint8_t *buf, size_t len)
 {
-	struct up_event *arg = (struct up_event *)v;
-	struct connection *conn = conns[arg->fd];
+	size_t cursor = 0;
 	ssize_t ret;
-	size_t cursor;
-	 
-	if (conn->fd < 0)
-		return; 
-	
-	conn->event_count++;
-		
-	cursor = conn->cursor;
-
-	if (arg->result == 0) {
-		on_close(conn);
-		return;
-	}
-
-	cursor += arg->result;
-	
-	if (cursor < msg_size) {
-		// Need the rest of the message
-		add_read(conn->fd, &conn[cursor], msg_size - cursor);
-		return;
-	}
-
-	conn->cursor = cursor = 0;
-	conn->state = WRITING;
 
 	do {
-		if ((ret = write(conn->fd, &(conn->buffer[cursor]), msg_size - cursor)) <= 0) {
+		if ((ret = write(fd, &(buf[cursor]), len - cursor)) <= 0) {
 			if (ret == 0) {
-				on_close(conn);
+				on_close(conns[fd]);
 				return;
 			}
 
@@ -146,54 +101,50 @@ void on_read(void *v)
 			continue;
 		}
 		cursor += ret;
-	} while (cursor < msg_size);
-
-	conn->state = READING;
-
-	add_read(conn->fd, conn->buffer, msg_size);
+	} while (cursor < len);
 }
 
-static void expand_queues(void)
+void my_read(struct up_event *arg)
 {
-	work_max += EVTS;
-	work = realloc(work, work_max * sizeof(struct up_event));
-	if (!work) {
-		perror("OOM");
-		exit(1);
+	struct connection *conn = conns[arg->fd];
+	uint8_t *buf = (uint8_t*)arg->buf;
+	 
+	if (conn->fd < 0)
+		return; 
+	
+	if (arg->result == 0) {
+		on_close(conn);
+		return;
 	}
 
-	recv_cnt += 2 * EVTS;
-	receive = realloc(receive, recv_cnt * sizeof(struct up_event));
-	if (!receive) {
-		perror("OOM");
-		exit(1);
+	conn->event_count++;
+
+	if (arg->result == msg_size) {
+		// The simplest case, we got everything in one go, echo it back
+		// and issue another read
+
+		conn->cursor = 0;
+		conn->state = WRITING;
+		my_write(conn->fd, buf, msg_size);
+		conn->state = READING;
+		goto out;
 	}
-}
 
-static void add_accept(int fd)
-{
-	if (work_cnt == work_max)
-		expand_queues();
+	// We got a fragment, copy it into our buffer
+	memcpy(&(conn->buffer[conn->cursor]), buf, arg->result);
+	conn->cursor += arg->result;
+	
+	if (conn->cursor < msg_size) {
+		// Need the rest of the message, issue another read but don't echo yet
+		goto out;
+	}
 
-	memset(&work[work_cnt], 0, sizeof(struct up_event));
+	// We have the whole message, echo it back
+	my_write(conn->fd, conn->buffer, msg_size);
 
-	work[work_cnt].fd = fd;
-	work[work_cnt].buf = (void*)0xDEADBEEF;
-	work[work_cnt].work_fn = on_accept;
-	work_cnt++;
-}
-
-static void add_read(int fd, void *buf, uint64_t len)
-{
-	if (work_cnt == work_max)
-		expand_queues();
-
-	work[work_cnt].fd = fd;
-	work[work_cnt].result = 0;
-	work[work_cnt].buf = buf;
-	work[work_cnt].len = len;
-	work[work_cnt].work_fn = on_read;
-	work_cnt++;
+out:
+	return_buffer(buf, arg->len);
+	add_read(conn->fd, my_read);
 }
 
 static void *worker_setup(void *arg)
@@ -226,9 +177,6 @@ static void *worker_setup(void *arg)
 
 	threads[me->index] = me;
 
-	work_max = EVTS;
-	recv_cnt = 2 * EVTS;
-
 	me->listen_sock = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, res->ai_protocol);
 
 	if (setsockopt(me->listen_sock, SOL_SOCKET, SO_REUSEPORT, &i, sizeof(i))) {
@@ -256,24 +204,15 @@ static void *worker_setup(void *arg)
 		exit(1);
 	}
 
-	work = calloc(work_max, sizeof(struct up_event));
-	if (!work) {
-		perror("OOM");
-		exit(1);
-	}
+	upcall_worker_setup(upfd, BUF_COUNT, msg_size);
 
-	receive = calloc(recv_cnt, sizeof(struct up_event));
-	if (!receive) {
-		perror("OOM");
-		exit(1);
-	}
-
-	add_accept(me->listen_sock);
+	add_accept(me->listen_sock, my_accept);
 
 	setup_perf(me->perf_fds, me->perf_ids, me->index);
 
 	ioctl(me->perf_fds[0], PERF_EVENT_IOC_RESET, 0);
 	ioctl(me->perf_fds[0], PERF_EVENT_IOC_ENABLE, 0);
+
 
 	pthread_mutex_lock(&setup_lock);
 	setup_count++;
@@ -281,24 +220,8 @@ static void *worker_setup(void *arg)
 		pthread_cond_wait(&setup_cond, &setup_lock);
 	pthread_mutex_unlock(&setup_lock);
 
-	// Work loop
-	while (1) {
-		int ret;
-		ret = upcall_submit(upfd, work_cnt, work, recv_cnt, receive);
-		if (ret < 0) {
-			perror("upcall_submit failed");
-			exit(ret);
-		}
 
-
-		work_cnt = 0;
-
-		for (int i = 0; i < ret; i++) {
-			if (receive[i].work_fn)
-				receive[i].work_fn(&receive[i]);
-		}
-		memset(receive, 0, recv_cnt * sizeof(struct up_event));
-	}
+	run_event_loop(upfd, 1);
 
 	return NULL;
 }
@@ -323,7 +246,6 @@ void init_threads(uint64_t nr_cpus)
 	event_cpu = CPU_ALLOC(nr_cpus);
 	for (unsigned long i = 0; i < nr_cpus; i++) {
 		CPU_SET_S(i, CPU_ALLOC_SIZE(nr_cpus), event_cpu);
-
 		if (pthread_attr_setaffinity_np(&attrs, CPU_ALLOC_SIZE(nr_cpus), event_cpu)) {
 			ret = EINVAL;
 			goto out_close;
