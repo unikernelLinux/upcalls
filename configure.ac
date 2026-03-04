@@ -98,5 +98,6 @@ AC_CONFIG_FILES([Makefile \
 		 initrd/init \
 		 initrd/Makefile \
 		 libupcall/Makefile \
+		 iperf/Makefile \
 		 event-tester/Makefile])
 AC_OUTPUT

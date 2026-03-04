@@ -485,7 +485,7 @@ static void *worker_func(void *arg)
 
 		if (rdy == 0) {
 			fprintf(stderr, "Nothing happened in 10 seconds after %lu transactions, is the server alive?\n", complete);
-			goto out_err;
+			exit(1);
 		}
 
 		if (rdy < 0) {

@@ -35,23 +35,19 @@ clean-local:
 	-cd initrd && $(MAKE) clean
 	-find -name config.cache -delete
 
-min-clean: app-clean kern-clean
-
-app-clean:
-	-cd libupcall && $(MAKE) clean
+init-clean:
 	-rm upcall-initrd.cpio.gz
-	-rm vmlinuz linux/vmlinux linux/arch/x86/boot/bzImage
+	-cd initrd && $(MAKE) clean
+
+app-clean: init-clean
+	-cd libupcall && $(MAKE) clean
 	-cd $(PROGRAM) && $(MAKE) clean
 
-kern-clean:
+kern-clean: init-clean
 	-rm vmlinuz
-	-rm upcall-initrd.cpio.gz
-	-cd initrd && $(MAKE) clean
 	-cd linux && $(MAKE) clean && rm .config
 
-init-clean:
-	-rm vmlinuz linux/vmlinux linux/arch/x86/boot/bzImage
-	-cd initrd && $(MAKE) clean
+min-clean: app-clean kern-clean init-clean
 
 DIST_SUBDIRS = event-tester libupcall
 

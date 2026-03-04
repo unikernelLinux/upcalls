@@ -60,6 +60,11 @@ void my_accept(struct up_event *arg)
 	int incoming = arg->result;
 	struct connection *new;
 
+	if (incoming < 0) {
+		printf("Error on accept %d\n", incoming);
+		goto out;
+	}
+
 	me->accept_count++;
 
 	new = new_conn(incoming);
@@ -72,36 +77,40 @@ void my_accept(struct up_event *arg)
 	if (!new->buffer) {
 		new->buffer = cache_alloc(msg_cache, me->index);
 		if (!new->buffer) {
-			perror("Malloc on read");
+			perror("Malloc on accept");
 			exit(1);
 		}
 	}
 
 	// Register our first read
 	add_read(new->fd, my_read);
+out:
 	add_accept(arg->fd, my_accept);
 }
 
-static void  my_write(int fd, uint8_t *buf, size_t len)
+static void  my_write(struct up_event *arg)
 {
-	size_t cursor = 0;
-	ssize_t ret;
+	struct connection *conn = conns[arg->fd];
 
-	do {
-		if ((ret = write(fd, &(buf[cursor]), len - cursor)) <= 0) {
-			if (ret == 0) {
-				on_close(conns[fd]);
-				return;
-			}
+	if (arg->result == 0) {
+		on_close(conn);
+		return;
+	}
 
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				continue;
-			}
-			perror("write to client");
-			continue;
-		}
-		cursor += ret;
-	} while (cursor < len);
+	if (arg->result < 0) {
+		printf("Error on write %d\n", arg->result);
+		return;
+	}
+
+	if (arg->result + conn->cursor < msg_size) {
+		// Only a partial
+		conn->cursor += arg->result;
+		add_write(conn->fd, (conn->buffer + conn->cursor),
+				msg_size - conn->cursor, my_write);
+		return;
+	}
+
+	add_read(conn->fd, my_read);
 }
 
 void my_read(struct up_event *arg)
@@ -119,32 +128,25 @@ void my_read(struct up_event *arg)
 
 	conn->event_count++;
 
-	if (arg->result == msg_size) {
-		// The simplest case, we got everything in one go, echo it back
-		// and issue another read
-
-		conn->cursor = 0;
-		conn->state = WRITING;
-		my_write(conn->fd, buf, msg_size);
-		conn->state = READING;
-		goto out;
+	if (arg->result < 0) {
+		// We got an error back
+		printf("Error on read %d\n", arg->result);
+		return;
 	}
 
-	// We got a fragment, copy it into our buffer
+	// We got data, copy it into our buffer
 	memcpy(&(conn->buffer[conn->cursor]), buf, arg->result);
 	conn->cursor += arg->result;
+	return_buffer(buf, arg->len);
 	
 	if (conn->cursor < msg_size) {
 		// Need the rest of the message, issue another read but don't echo yet
-		goto out;
+		add_read(conn->fd, my_read);
+		return;
 	}
 
 	// We have the whole message, echo it back
-	my_write(conn->fd, conn->buffer, msg_size);
-
-out:
-	return_buffer(buf, arg->len);
-	add_read(conn->fd, my_read);
+	add_write(conn->fd, conn->buffer, msg_size, my_write);
 }
 
 static void *worker_setup(void *arg)
@@ -237,7 +239,7 @@ void init_threads(uint64_t nr_cpus)
 	pthread_attr_init(&attrs);
 	pthread_attr_setdetachstate(&attrs, PTHREAD_CREATE_DETACHED);
 
-	upfd = upcall_create(upcall_flags);
+	upfd = upcall_create(upcall_flags, 4);
 	if (upfd < 0) {
 		printf("Event Handler setup failed\n");
 		exit(-errno);

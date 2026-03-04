@@ -28,7 +28,7 @@ cp ./perf /usr/sbin/
 binfiles="cat ls mkdir lspci mknod mount bash top touch awk less"
 binfiles="$binfiles umount sed sleep ln rm uname grep nproc"
 binfiles="$binfiles readlink basename chmod ps pidof pgrep pkill"
-binfiles="$binfiles cut netstat ip kmod"
+binfiles="$binfiles cut netstat ip kmod strace"
 
 sbinfiles="modprobe rmmod rdmsr wrmsr ethtool halt dropbear"
 
@@ -43,7 +43,7 @@ mkdir -p ${WDIR}
 chmod 775 ${WDIR}
 
 # Create base directory structure
-for dir in  "${WDIR}/dev" "${WDIR}/etc/dropbear" "${WDIR}/run" "${WDIR}/sys" "${WDIR}/proc" "${WDIR}/usr/bin" "${WDIR}/usr/lib/x86_64-linux-gnu" "${WDIR}/usr/lib64" "${WDIR}/usr/sbin" "${WDIR}/var/run" 
+for dir in  "${WDIR}/dev" "${WDIR}/etc/dropbear" "${WDIR}/run" "${WDIR}/sys" "${WDIR}/proc" "${WDIR}/usr/bin" "${WDIR}/usr/lib/x86_64-linux-gnu" "${WDIR}/usr/lib64" "${WDIR}/usr/sbin" "${WDIR}/var/run" "${WDIR}/tmp"
 do
 	mkdir -p $dir
 done
@@ -132,6 +132,9 @@ fi
 cp -r exp ${WDIR}
 
 mv lib/modules ${WDIR}/lib
+
+mkdir -p ${WDIR}/lib/firmware
+cp -R firmware/* ${WDIR}/lib/firmware
 
 rm -f $unsorted
 

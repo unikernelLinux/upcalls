@@ -52,9 +52,9 @@
 
 #define EVTS 4
 
-extern int upcall_create(int flags)
+extern int upcall_create(size_t backlog, int flags)
 {
-	return syscall(SYS_upcall_create, flags);
+	return syscall(SYS_upcall_create, backlog, flags);
 }
 
 extern int upcall_submit(int upfd, int in_cnt, struct up_event *in,
@@ -145,6 +145,20 @@ void add_read(int fd, void (*work_fn)(struct up_event *evt))
 	memset(&work[work_cnt], 0, sizeof(struct up_event));
 	work[work_cnt].fd = fd;
 	work[work_cnt].type = UP_READ;
+	work[work_cnt].work_fn = work_fn;
+	work_cnt++;
+}
+
+void add_write(int fd, void *buf, size_t len, void (*work_fn)(struct up_event *evt))
+{
+	if (work_cnt == work_max)
+		expand_queue();
+
+	memset(&work[work_cnt], 0, sizeof(struct up_event));
+	work[work_cnt].fd = fd;
+	work[work_cnt].buf = buf;
+	work[work_cnt].len = len;
+	work[work_cnt].type = UP_WRITE;
 	work[work_cnt].work_fn = work_fn;
 	work_cnt++;
 }

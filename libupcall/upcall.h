@@ -33,6 +33,7 @@
 
 typedef enum {
 	UP_READ,	// Requesting a read of the fd
+	UP_WRITE,	// Requesting a write of the fd
 	UP_ACCEPT,	// Requesting an accept4 on the fd (will imply SOCK_NONBLOCK)
 	UP_VEC,		// Give the struct iovec array at buf with len items to the kernel
 	NR_ACTIONS	// Error checking
@@ -61,7 +62,7 @@ struct up_event {
 
 typedef unsigned __poll_t;
 
-int upcall_create(int flags);
+int upcall_create(size_t backlog, int flags);
 
 int upcall_submit(int upfd, int in_cnt, struct up_event *in,
 		int out_cnt, struct up_event *out);
@@ -71,6 +72,8 @@ void return_buffer(void *buf, size_t len);
 void add_read(int fd, void (*work_fn)(struct up_event *evt));
 
 void add_accept(int fd, void (*work_fn)(struct up_event *evt));
+
+void add_write(int fd, void *buf, size_t len, void (*work_fn)(struct up_event *evt));
 
 void upcall_worker_setup(int upfd, size_t buf_cnt, size_t buf_sz);
 

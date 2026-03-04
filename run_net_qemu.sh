@@ -20,7 +20,7 @@ ip link set dev virbr0 up
 ip link set dev $TAPDEV up
 
 qemu-system-x86_64 \
-    -cpu host,-smap,-smep -accel kvm -m 4G \
+    -cpu host,-smap,-smep -accel kvm -m 64G \
     -kernel $1 \
     -initrd $2 \
     -nodefaults -nographic -serial stdio \
