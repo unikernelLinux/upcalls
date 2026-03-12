@@ -15,8 +15,8 @@ if [[ $SMP > 1 ]]; then
 fi
 
 ip tuntap add dev $TAPDEV mode tap ${TMQ}
-ip link set dev $TAPDEV master virbr0
-ip link set dev virbr0 up
+ip link set dev $TAPDEV master qbr0
+ip link set dev qbr0 up
 ip link set dev $TAPDEV up
 
 qemu-system-x86_64 \
