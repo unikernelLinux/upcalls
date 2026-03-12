@@ -24,7 +24,7 @@ qemu-system-x86_64 \
     -kernel $1 \
     -initrd $2 \
     -nodefaults -nographic -serial stdio \
-    -append "console=ttyS0 net.ifnames=0 biosdevname=0 -- 192.168.122.128 52:54:00:12:34:56 ${4}" \
+    -append "console=ttyS0 net.ifnames=0 biosdevname=0 -- 192.168.222.128 52:54:00:12:34:56 ${4}" \
     -netdev tap,ifname=${TAPDEV},id=eth0,script=no,downscript=no${QUEUES} \
     -device virtio-net-pci,netdev=eth0,${MQ}mac=52:54:00:12:34:56 \
     -smp $SMP
