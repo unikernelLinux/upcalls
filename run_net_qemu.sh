@@ -3,7 +3,11 @@
 set -x
 
 SMP=${3:-1}
-TAPDEV=${5:-tap0}
+DEBUG=
+if [ -n "${5}" ] ; then
+	DEBUG="-s -S"
+fi
+TAPDEV=${6:-tapupcall}
 
 MQ=
 QUEUES=
@@ -24,9 +28,10 @@ qemu-system-x86_64 \
     -kernel $1 \
     -initrd $2 \
     -nodefaults -nographic -serial stdio \
-    -append "console=ttyS0 net.ifnames=0 biosdevname=0 -- 192.168.222.128 52:54:00:12:34:56 ${4}" \
+    -no-shutdown -no-reboot \
+    -append "console=ttyS0 net.ifnames=0 biosdevname=0 nordand nopti nokaslr -- IP=192.168.222.128 MAC=52:54:00:12:34:56 AFFINITY=${4}" \
     -netdev tap,ifname=${TAPDEV},id=eth0,script=no,downscript=no${QUEUES} \
     -device virtio-net-pci,netdev=eth0,${MQ}mac=52:54:00:12:34:56 \
-    -smp $SMP
+    -smp $SMP $DEBUG
 
 ip tuntap del dev $TAPDEV mode tap ${TMQ}
