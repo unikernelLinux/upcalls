@@ -91,7 +91,7 @@ UPCALL_LIB =
 endif
 
 $(abs_top_builddir)/libupcall/libupcall.a:
-	cd $(abs_top_builddir)/libupcall && $(MAKE) 
+	cd $(abs_top_builddir)/libupcall && $(MAKE)
 
 $(PROGRAM)/stamp-initrd: $(UPCALL_LIB)
 	$(MAKE) -C $(PROGRAM) stamp-initrd
@@ -107,6 +107,7 @@ $(PROGRAM)/data.tar.gz: $(UPCALL_LIB)
 # Build the initramfs
 
 noinst_DATA += upcall-initrd.cpio.gz
+
 upcall-initrd.cpio.gz: $(PROGRAM)/stamp-initrd $(PROGRAM)/data.tar.gz vmlinuz initrd/perf
 	cp $(PROGRAM)/data.tar.gz initrd/
 	$(MAKE) -C $(srcdir)/initrd $@

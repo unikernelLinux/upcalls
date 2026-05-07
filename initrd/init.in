@@ -6,7 +6,64 @@ export TERM=vt100
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin
 export ENV="HOME=$HOME LOGNAME=$LOGNAME TERM=$TERM PATH=$PATH"
 
+IP=""
+MAC=""
+AFFINITY=""
+ARGS=""
+
+echo "$@"
+
+ARGS_IN_PROGRESS=0
+for var in $@; do
+	if [[ $ARGS_IN_PROGRESS -eq 1 ]]; then
+		case "$var" in
+			IP=*|MAC=*|AFFINITY=*)
+				ARGS_IN_PROGRESS=0
+				# fall through to normal parsing for the next token
+				;;
+			*)
+				if [[ -z "$ARGS" ]]; then
+					ARGS="$var"
+				else
+					ARGS="$ARGS $var"
+				fi
+				continue
+				;;
+		esac
+	fi
+
+	case $var in
+	IP=*)
+		IP="${var#IP=}"
+		;;
+
+	MAC=*)
+		MAC="${var#MAC=}"
+		;;
+
+	AFFINITY=*)
+		AFFINITY="${var#AFFINITY=}"
+		if [[ ${AFFINITY} != 1 ]] ; then
+			AFFINITY=""
+		fi
+		;;
+	ARGS=*)
+		ARGS="${var#ARGS=}"
+		ARGS_IN_PROGRESS=1
+		;;
+	esac
+done
+
+# strip matching surrounding quotes from ARGS so it can be re-split by the shell
+if [[ "${ARGS:0:1}" == '"' && "${ARGS: -1}" == '"' ]]; then
+	ARGS="${ARGS:1:${#ARGS}-2}"
+fi
+if [[ "${ARGS:0:1}" == "'" && "${ARGS: -1}" == "'" ]]; then
+	ARGS="${ARGS:1:${#ARGS}-2}"
+fi
+
 # setup standard file system view
+mkdir -p /run
 mount -t proc /proc /proc
 mount -t sysfs /sys /sys
 
@@ -55,10 +112,8 @@ echo "Running Setup scripts" >> /log
 echo "Done" >> /log
 
 # Configure the requested network interface by MAC($2) to use IP($1)
-if [ -n "${1}" ]; then
-	IP=$1
-	if [ -n "${2}" ]; then
-		MAC=$2
+if [ -n "${IP}" ]; then
+	if [ -n "${MAC}" ]; then
 		INF=`/usr/bin/ip -o link | awk -F ': ' -vIGNORECASE=1 '!/link\/ieee802\.11/ && /'"$MAC"'/ { print $2 }'`
 	else
 		INF="eth0"
@@ -67,12 +122,12 @@ if [ -n "${1}" ]; then
 	/usr/bin/ip address add $IP/24 brd + dev $INF
 	/usr/bin/ip link set $INF up
 
-	if [ -n "${4}" ]; then
+	if [ -n "${AFFINITY}" ]; then
 		# Receive queue affinity has been requested, we will try and create a receive queue per CPU and
 		# bind each one to a single CPU to preserve data locality
 		CPU_CNT=$(nproc)
 		/usr/sbin/ethtool -L ${INF} rx ${CPU_CNT} tx ${CPU_CNT}
-		
+
 		PCI_ADDR=$(basename $(readlink /sys/class/net/${INF}/device))
 		CPU_IDX=0
 		grep ${PCI_ADDR} /proc/interrupts | while read -r line; do
@@ -96,7 +151,7 @@ sleep 5
 echo "UPCALL BOOTED"
 
 # Start target process
-@TRIGGER@ ${3}
+@TRIGGER@ ${ARGS}
 
 /bin/bash
 

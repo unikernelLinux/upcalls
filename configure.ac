@@ -99,5 +99,6 @@ AC_CONFIG_FILES([Makefile \
 		 initrd/Makefile \
 		 libupcall/Makefile \
 		 iperf/Makefile \
+		 scheduler_latency/Makefile \
 		 event-tester/Makefile])
 AC_OUTPUT
