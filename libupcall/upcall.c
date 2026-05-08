@@ -52,9 +52,9 @@
 
 #define EVTS 4
 
-extern int upcall_create(size_t backlog, int flags)
+extern int upcall_create(int flags)
 {
-	return syscall(SYS_upcall_create, backlog, flags);
+	return syscall(SYS_upcall_create, flags);
 }
 
 extern int upcall_submit(int upfd, int in_cnt, struct up_event *in,

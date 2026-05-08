@@ -62,7 +62,7 @@ struct up_event {
 
 typedef unsigned __poll_t;
 
-int upcall_create(size_t backlog, int flags);
+int upcall_create(int flags);
 
 int upcall_submit(int upfd, int in_cnt, struct up_event *in,
 		int out_cnt, struct up_event *out);

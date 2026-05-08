@@ -110,6 +110,8 @@ static void  my_write(struct up_event *arg)
 		return;
 	}
 
+	conn->cursor = 0;
+
 	add_read(conn->fd, my_read);
 }
 
@@ -144,6 +146,8 @@ void my_read(struct up_event *arg)
 		add_read(conn->fd, my_read);
 		return;
 	}
+
+	conn->cursor = 0;
 
 	// We have the whole message, echo it back
 	add_write(conn->fd, conn->buffer, msg_size, my_write);
@@ -239,7 +243,7 @@ void init_threads(uint64_t nr_cpus)
 	pthread_attr_init(&attrs);
 	pthread_attr_setdetachstate(&attrs, PTHREAD_CREATE_DETACHED);
 
-	upfd = upcall_create(upcall_flags, 4);
+	upfd = upcall_create(upcall_flags);
 	if (upfd < 0) {
 		printf("Event Handler setup failed\n");
 		exit(-errno);
