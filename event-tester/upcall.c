@@ -28,7 +28,7 @@
 #define EVTS 2
 
 #ifndef FLAGS
-#define FLAGS UPCALL_PCACHE
+#define FLAGS UPCALL_PCPU
 #endif
 
 #ifndef BUF_COUNT

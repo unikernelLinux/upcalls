@@ -38,7 +38,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <errno.h>
-#include <sys/ioctl.h>
 
 #include "upcall.h"
 
