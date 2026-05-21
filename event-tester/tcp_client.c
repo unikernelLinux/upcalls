@@ -745,6 +745,15 @@ int main(int argc, char **argv)
 	 * number of clients per thread
 	 */
 	max_events *= clients_per_thread;
+
+	/*
+	 * Under load with many concurrent large-message clients, TCP delivers data
+	 * in far smaller chunks than the MTU estimate above, producing many more
+	 * EPOLLIN events per transaction than min_io predicts.  Add an 8x safety
+	 * margin.  Physical pages are only faulted in as entries are written, so
+	 * the virtual over-allocation is cheap.
+	 */
+	max_events *= 8;
 	
 	hdr_size = sizeof(struct TscLog);
 	entry_size = TscLogEntrySize(4) * max_events;
@@ -888,6 +897,15 @@ int main(int argc, char **argv)
 	} while (optval > 0 && index < perf_sz);
 
 	close(fd);
+
+	// Check for log overflow before dumping — overflow means the buffer size
+	// estimate was too small and some events were silently dropped.
+	for (i = 0; i < nr_threads; i++) {
+		if (threads[i].log->hdr.info.overflow)
+			fprintf(stderr, "ERROR: TSC log overflowed for thread %zu — "
+				"results will be incomplete. Increase max_events safety "
+				"factor in tcp_client.c.\n", i);
+	}
 
 	// Write our transaction log to disk
 	fd = open(out_file, O_WRONLY | O_CREAT | O_TRUNC,
