@@ -27,10 +27,6 @@
 
 #define EVTS 2
 
-#ifndef FLAGS
-#define FLAGS UPCALL_PCPU
-#endif
-
 #ifndef BUF_COUNT
 #define BUF_COUNT 128
 #endif
@@ -236,14 +232,13 @@ void init_threads(uint64_t nr_cpus)
 {
 	pthread_attr_t attrs;
 	cpu_set_t *event_cpu;
-	int upcall_flags = FLAGS;
 	int ret = 1;
 	pthread_t dummy;
 
 	pthread_attr_init(&attrs);
 	pthread_attr_setdetachstate(&attrs, PTHREAD_CREATE_DETACHED);
 
-	upfd = upcall_create(upcall_flags);
+	upfd = upcall_create(0);
 	if (upfd < 0) {
 		printf("Event Handler setup failed\n");
 		exit(-errno);

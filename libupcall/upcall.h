@@ -28,7 +28,7 @@
 #ifndef UPCALL_H_
 #define UPCALL_H_
 
-#include <fcntl.h>
+#include <stdint.h>
 #include <sys/uio.h>
 
 typedef enum {
@@ -51,14 +51,7 @@ struct up_event {
 	};
 } __attribute__((packed));
 
-#define UPIOGQCNT       0x00000001
-#define UPWRKINIT	0x00000002
-
-#define UPCALL_PCPU             0x00010000
-#define UPCALL_PCACHE           0x00020000
-#define UPCALL_SINGLE           0x00040000
-#define UPCALL_MODEL_MASK       (UPCALL_PCPU | UPCALL_PCACHE | UPCALL_SINGLE)
-#define UPCALL_MASK             (O_CLOEXEC | UPCALL_MODEL_MASK)
+#define UPCALL_MASK             (O_CLOEXEC)
 
 typedef unsigned __poll_t;
 
