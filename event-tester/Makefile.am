@@ -28,6 +28,10 @@ endif
 
 AM_CFLAGS = -O2 -ggdb -Wall -Werror
 
+if ENABLE_LIBUPCALL
+AM_CFLAGS += -DENABLE_LIBUPCALL
+endif
+
 EV_SYS = @EVENT_SYSTEM@
 
 if EV_IS_URING

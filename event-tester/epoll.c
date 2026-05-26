@@ -417,3 +417,5 @@ int close_from_io(struct connection *conn)
 	return 1;
 }
 
+void workers_go(void) {}
+

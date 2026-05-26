@@ -9,27 +9,17 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <sched.h>
 #include <errno.h>
 #include <pthread.h>
-#include <limits.h>
 
 #include <sys/ioctl.h>
 
 #include <linux/perf_event.h>
 #include <arpa/inet.h>
-
 #include <netinet/in.h>
 
 #include "tcp_echo.h"
-
 #include "../libupcall/upcall.h"
-
-#define EVTS 2
-
-#ifndef BUF_COUNT
-#define BUF_COUNT 128
-#endif
 
 extern __thread struct worker_thread *me;
 extern __thread struct buffer_cache *msg_cache;
@@ -38,14 +28,7 @@ extern struct connection **conns;
 extern struct worker_thread **threads;
 extern size_t nr_cpus;
 extern size_t msg_size;
-
 extern struct addrinfo *res;
-
-static pthread_cond_t setup_cond = PTHREAD_COND_INITIALIZER;
-static pthread_mutex_t setup_lock = PTHREAD_MUTEX_INITIALIZER;
-static unsigned long setup_count;
-
-static int upfd;
 
 struct connection *new_conn(int fd);
 
@@ -78,13 +61,12 @@ void my_accept(struct up_event *arg)
 		}
 	}
 
-	// Register our first read
 	add_read(new->fd, my_read);
 out:
 	add_accept(arg->fd, my_accept);
 }
 
-static void  my_write(struct up_event *arg)
+static void my_write(struct up_event *arg)
 {
 	struct connection *conn = conns[arg->fd];
 
@@ -99,10 +81,9 @@ static void  my_write(struct up_event *arg)
 	}
 
 	if (arg->result + conn->cursor < msg_size) {
-		// Only a partial
 		conn->cursor += arg->result;
 		add_write(conn->fd, (conn->buffer + conn->cursor),
-				msg_size - conn->cursor, my_write);
+			  msg_size - conn->cursor, my_write);
 		return;
 	}
 
@@ -114,11 +95,11 @@ static void  my_write(struct up_event *arg)
 void my_read(struct up_event *arg)
 {
 	struct connection *conn = conns[arg->fd];
-	uint8_t *buf = (uint8_t*)arg->buf;
-	 
+	uint8_t *buf = (uint8_t *)arg->buf;
+
 	if (conn->fd < 0)
-		return; 
-	
+		return;
+
 	if (arg->result == 0) {
 		on_close(conn);
 		return;
@@ -127,29 +108,30 @@ void my_read(struct up_event *arg)
 	conn->event_count++;
 
 	if (arg->result < 0) {
-		// We got an error back
 		printf("Error on read %d\n", arg->result);
 		return;
 	}
 
-	// We got data, copy it into our buffer
 	memcpy(&(conn->buffer[conn->cursor]), buf, arg->result);
 	conn->cursor += arg->result;
 	return_buffer(buf, arg->len);
-	
+
 	if (conn->cursor < msg_size) {
-		// Need the rest of the message, issue another read but don't echo yet
 		add_read(conn->fd, my_read);
 		return;
 	}
 
 	conn->cursor = 0;
 
-	// We have the whole message, echo it back
 	add_write(conn->fd, conn->buffer, msg_size, my_write);
 }
 
-static void *worker_setup(void *arg)
+/*
+ * Per-worker setup callback: called by libupcall from each worker thread
+ * after pool initialisation.  Registers the worker's listen socket so
+ * it is ready before upcall_workers_go() opens the event loop.
+ */
+static void upcall_echo_setup(int worker_id, int nr_workers)
 {
 	int i = 1;
 
@@ -159,11 +141,7 @@ static void *worker_setup(void *arg)
 		exit(1);
 	}
 
-	me->index = sched_getcpu();
-	if (me->index < 0) {
-		perror("sched_getcpu():");
-		exit(1);
-	}
+	me->index = worker_id;
 
 	msg_cache = init_cache(msg_size, 1024, me->index);
 	if (!msg_cache) {
@@ -177,22 +155,23 @@ static void *worker_setup(void *arg)
 		exit(1);
 	}
 
-	threads[me->index] = me;
+	threads[worker_id] = me;
 
-	me->listen_sock = socket(res->ai_family, res->ai_socktype | SOCK_NONBLOCK, res->ai_protocol);
+	me->listen_sock = socket(res->ai_family,
+				 res->ai_socktype | SOCK_NONBLOCK,
+				 res->ai_protocol);
+	if (me->listen_sock < 0) {
+		perror("socket():");
+		exit(1);
+	}
 
 	if (setsockopt(me->listen_sock, SOL_SOCKET, SO_REUSEPORT, &i, sizeof(i))) {
-		perror("setsockopt():");
+		perror("setsockopt SO_REUSEPORT:");
 		exit(1);
 	}
 
 	if (setsockopt(me->listen_sock, SOL_SOCKET, SO_REUSEADDR, &i, sizeof(i))) {
-		perror("setsockopt():");
-		exit(1);
-	}
-
-	if (me->listen_sock < 0) {
-		perror("socket():");
+		perror("setsockopt SO_REUSEADDR:");
 		exit(1);
 	}
 
@@ -206,77 +185,12 @@ static void *worker_setup(void *arg)
 		exit(1);
 	}
 
-	upcall_worker_setup(upfd, BUF_COUNT, msg_size);
-
 	add_accept(me->listen_sock, my_accept);
 
 	setup_perf(me->perf_fds, me->perf_ids, me->index);
 
 	ioctl(me->perf_fds[0], PERF_EVENT_IOC_RESET, 0);
 	ioctl(me->perf_fds[0], PERF_EVENT_IOC_ENABLE, 0);
-
-
-	pthread_mutex_lock(&setup_lock);
-	setup_count++;
-	while(setup_count)
-		pthread_cond_wait(&setup_cond, &setup_lock);
-	pthread_mutex_unlock(&setup_lock);
-
-
-	run_event_loop(upfd, 1);
-
-	return NULL;
-}
-
-void init_threads(uint64_t nr_cpus)
-{
-	pthread_attr_t attrs;
-	cpu_set_t *event_cpu;
-	int ret = 1;
-	pthread_t dummy;
-
-	pthread_attr_init(&attrs);
-	pthread_attr_setdetachstate(&attrs, PTHREAD_CREATE_DETACHED);
-
-	upfd = upcall_create(0);
-	if (upfd < 0) {
-		printf("Event Handler setup failed\n");
-		exit(-errno);
-	}
-
-	event_cpu = CPU_ALLOC(nr_cpus);
-	for (unsigned long i = 0; i < nr_cpus; i++) {
-		CPU_SET_S(i, CPU_ALLOC_SIZE(nr_cpus), event_cpu);
-		if (pthread_attr_setaffinity_np(&attrs, CPU_ALLOC_SIZE(nr_cpus), event_cpu)) {
-			ret = EINVAL;
-			goto out_close;
-		}
-
-		if (pthread_create(&dummy, &attrs, worker_setup, NULL)) {
-			ret = EINVAL;
-			goto out_close;
-		}
-
-		CPU_CLR_S(i, CPU_ALLOC_SIZE(nr_cpus), event_cpu);
-	}
-
-	CPU_FREE(event_cpu);
-
-	pthread_mutex_lock(&setup_lock);
-	while (setup_count < nr_cpus) {
-		pthread_mutex_unlock(&setup_lock);
-		pthread_mutex_lock(&setup_lock);
-	}
-	setup_count = 0;
-	pthread_mutex_unlock(&setup_lock);
-	pthread_cond_broadcast(&setup_cond);
-
-	return;
-
-out_close:
-	close(upfd);
-	upfd = -1;
-	exit(ret);
 }
 
 void on_close(void *arg)
@@ -298,5 +212,17 @@ void on_close(void *arg)
 		cache_free(conn_cache, conn, me->index);
 		me->conn_count++;
 	}
+}
 
+void init_threads(uint64_t ignored)
+{
+	if (upcall_init(BUF_COUNT, msg_size, upcall_echo_setup, NULL)) {
+		fprintf(stderr, "upcall_init failed\n");
+		exit(1);
+	}
+}
+
+void workers_go(void)
+{
+	upcall_workers_go();
 }

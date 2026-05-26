@@ -523,19 +523,18 @@ int main(int argc, char **argv)
 		goto out_ret;
 	}
 
-	nr_cpus = sysconf(_SC_NPROCESSORS_ONLN);
-
 	printf("Setting up connection structures\n");
 
 	init_conns();
 
-	printf("Starting %lu worker threads\n", nr_cpus);
-
-	threads = calloc(nr_cpus, sizeof(struct worker_thread*));
+	nr_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+	threads = calloc(nr_cpus, sizeof(struct worker_thread *));
 	if (!threads) {
 		perror("calloc():");
 		exit(1);
 	}
+
+	printf("Starting %lu worker threads\n", nr_cpus);
 
 	init_threads(nr_cpus);
 
@@ -546,8 +545,9 @@ int main(int argc, char **argv)
 	}
 
 	printf("Listening on %s:%s\n", addr_str, prt_str);
-
 	printf("Started %lu threads\n!! Server is ready. !!\n", nr_cpus);
+
+	workers_go();
 
 	evt.events = 0;
 	evt.data.fd = 0;

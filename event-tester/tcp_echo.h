@@ -96,6 +96,7 @@ void on_read(void *arg);
 void setup_perf(int *fds, int *ids, int cpu);
 
 void init_threads(uint64_t nr_cpus);
+void workers_go(void);
 
 struct connection *new_conn(int fd);
 

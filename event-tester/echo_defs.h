@@ -25,6 +25,10 @@
 #define MAX_CONNS 1024
 #endif
 
+#ifndef BUF_COUNT
+#define BUF_COUNT 128
+#endif
+
 #define TOTAL_EVENTS 5
 #define CONN_EVENT (uint64_t)(1)
 

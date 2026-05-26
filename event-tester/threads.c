@@ -225,3 +225,5 @@ void init_threads(uint64_t cpus)
 	pthread_mutex_unlock(&worker_hang_lock);
 }
 
+void workers_go(void) {}
+

@@ -17,14 +17,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-/**
- *
- * This is a consolidation of the code needed to interact with the upcall
- * mechanism found in UKL. We have the event loop where we park execution
- * contexts when they are not in use, the API for setiing up the system, and
- * an API for adding and removing event subscriptions.
- */
-
 #ifndef UPCALL_H_
 #define UPCALL_H_
 
@@ -32,11 +24,11 @@
 #include <sys/uio.h>
 
 typedef enum {
-	UP_READ,	// Requesting a read of the fd
-	UP_WRITE,	// Requesting a write of the fd
-	UP_ACCEPT,	// Requesting an accept4 on the fd (will imply SOCK_NONBLOCK)
-	UP_VEC,		// Give the struct iovec array at buf with len items to the kernel
-	NR_ACTIONS	// Error checking
+	UP_READ,	/* Requesting a read of the fd */
+	UP_WRITE,	/* Requesting a write of the fd */
+	UP_ACCEPT,	/* Requesting an accept4 on the fd (will imply SOCK_NONBLOCK) */
+	UP_VEC,		/* Give the struct iovec array at buf with len items to the kernel */
+	NR_ACTIONS
 } up_action_t;
 
 struct up_event {
@@ -55,21 +47,50 @@ struct up_event {
 
 typedef unsigned __poll_t;
 
-int upcall_create(int flags);
+/*
+ * Returns the number of online CPUs — equal to the number of worker threads
+ * that upcall_init() will spawn.
+ */
+int upcall_nr_workers(void);
 
-int upcall_submit(int upfd, int in_cnt, struct up_event *in,
-		int out_cnt, struct up_event *out);
+/*
+ * Spawn one worker thread per online CPU, each pinned to its CPU.
+ * Internally calls upcall_worker_setup(bufs, buf_sz) per worker, then
+ * invokes setup_fn (if non-NULL) so each worker can register its initial
+ * events (add_accept, add_read, etc.).  Blocks until every worker has
+ * completed setup_fn.  Workers then wait for upcall_workers_go().
+ *
+ * loop_fn (may be NULL) is called from each worker between event batches.
+ *
+ * Returns 0 on success, -errno on failure.
+ */
+int upcall_init(size_t bufs, size_t buf_sz,
+		void (*setup_fn)(int worker_id, int nr_workers),
+		void (*loop_fn)(void));
 
+/*
+ * Release all workers into the event loop.  Must be called after
+ * upcall_init() returns.  The window between upcall_init() and
+ * upcall_workers_go() is the correct place for the main thread to
+ * perform any final setup (e.g. printing a "server ready" message).
+ */
+void upcall_workers_go(void);
+
+/*
+ * Returns the 0-indexed worker ID of the calling thread.
+ * Returns -1 if called from outside a libupcall worker thread.
+ */
+int upcall_worker_id(void);
+
+/* --- Callback-facing API ---
+ * Safe to call from setup_fn, loop_fn, and event callbacks.
+ * Calls queue work into the calling worker's submission batch; the batch
+ * is submitted to the kernel on the next run_event_loop round-trip.
+ */
 void return_buffer(void *buf, size_t len);
-
 void add_read(int fd, void (*work_fn)(struct up_event *evt));
-
 void add_accept(int fd, void (*work_fn)(struct up_event *evt));
-
-void add_write(int fd, void *buf, size_t len, void (*work_fn)(struct up_event *evt));
-
-void upcall_worker_setup(int upfd, size_t buf_cnt, size_t buf_sz);
-
-void run_event_loop(int upfd, int continuous);
+void add_write(int fd, void *buf, size_t len,
+	       void (*work_fn)(struct up_event *evt));
 
 #endif

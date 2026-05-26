@@ -16,10 +16,14 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-CLEANFILES = *~ *.o memcached/memcached stamp-initrd data.tar.gz
+CLEANFILES = *~ *.o stamp-initrd data.tar.gz
 
 data.tar.gz:
 	touch data.tar.gz
+
+clean:
+	rm -f ${CLEANFILES}
+	make -C memcached clean
 
 stamp-initrd: memcached/memcached
 	rm -f $@
@@ -35,20 +39,14 @@ stamp-memcached-dir:
 	touch $@
 
 memcached/memcached: stamp-memcached-dir
-	ifdef ENABLE_LIBUPCALL
-	cd memcached && git checkout upcalls;
-	else
-	cd memcached && git checkout vanilla;
-	endif
-	cd memcached && autogen.sh
+	if [ -z "${ENABLE_LIBUPCALL}" ]; then \
+	cd memcached && git checkout vanilla; \
+	else \
+	cd memcached && git checkout upcalls; \
+	fi
+	cd memcached && ./autogen.sh
 	cd memcached && ./configure
 	make -j$(nproc) -C memcached
-
-stamp-initrd: memcached/memcached
-	rm -f $@
-	mkdir -p ../initrd/app
-	cp memcached/memcached ../initrd/app/memcached
-	touch $@
 
 all: memcached/memcached
 
