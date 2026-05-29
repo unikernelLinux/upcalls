@@ -150,8 +150,5 @@ sleep 5
 
 echo "UPCALL BOOTED"
 
-# Start target process
-@TRIGGER@ ${ARGS}
-
 /bin/bash
 

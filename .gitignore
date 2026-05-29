@@ -12,7 +12,6 @@ missing
 install-sh
 config.*
 configure
-initrd/init
 initrd/perf
 data.tar.gz
 configure~

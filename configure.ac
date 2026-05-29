@@ -51,26 +51,6 @@ AC_MSG_RESULT([$PROGRAM])
 AC_SUBST([PROGRAM])
 
 
-dnl Set the string used to start the experiment
-AC_MSG_CHECKING([Target Application string])
-AC_ARG_WITH([app-trigger],
-    [AS_HELP_STRING([--with-app-trigger],
-	[set the string checked in exec to trigger the target process @<:@default=/usr/bin/tcp_echo@:>@])],
-	[TRIGGER="$withval"],
-	[TRIGGER="/usr/bin/tcp_echo"])
-AC_MSG_RESULT([$TRIGGER])
-AC_SUBST([TRIGGER])
-
-dnl Start perf before experiment process
-AC_MSG_CHECKING([perf invocation])
-AC_ARG_WITH([profiler],
-    [AS_HELP_STRING([--with-profiler],
-	[run this profiler before starting experiment process @<:@default=@:>@])],
-	[PROFILER="$withval"],
-	[PROFILER=""])
-AC_MSG_RESULT([$PROFILER])
-AC_SUBST([PROFILER])
-
 AC_MSG_CHECKING([if we should enable and use libupcall])
 AC_ARG_ENABLE([libupcall],
     [AS_HELP_STRING([--enable-libupcall],
@@ -95,7 +75,6 @@ AM_CONDITIONAL(EV_IS_URING, [test x"$EVENT_SYSTEM" = xiouring])
 dnl Produce output files.
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile \
-		 initrd/init \
 		 initrd/Makefile \
 		 libupcall/Makefile \
 		 iperf/Makefile \
