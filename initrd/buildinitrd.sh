@@ -28,7 +28,7 @@ cp ./perf /usr/sbin/
 binfiles="cat ls mkdir lspci mknod mount bash top touch awk less"
 binfiles="$binfiles umount sed sleep ln rm uname grep nproc"
 binfiles="$binfiles readlink basename chmod ps pidof pgrep pkill"
-binfiles="$binfiles cut netstat ip kmod strace"
+binfiles="$binfiles cut netstat ip kmod strace udevadm"
 
 sbinfiles="modprobe rmmod rdmsr wrmsr ethtool halt dropbear"
 
@@ -77,6 +77,7 @@ install -m0755 $INITIN ${WDIR}/init
 mkdir -p ${WDIR}/usr/lib/openssh/
 ldd /usr/lib/openssh/sftp-server | sed "s/\t//" | cut -d " " -f1 >> $unsorted
 copy /usr/lib/openssh/sftp-server usr/lib/openssh/
+ln -s /usr/lib/openssh/sftp-server usr/lib/sftp-server
 
 # Install basic binaries
 for f in $binfiles ; do
@@ -96,14 +97,18 @@ for f in `ls app/` ; do
   cp app/$f ${WDIR}/usr/bin/
 done
 
+# systemd-udevd lives outside the standard bin/sbin paths
+mkdir -p ${WDIR}/usr/lib/systemd
+ldd /usr/lib/systemd/systemd-udevd | sed "s/\t//" | cut -d " " -f1 >> $unsorted
+cp /usr/lib/systemd/systemd-udevd ${WDIR}/usr/lib/systemd/systemd-udevd
+
 # Install libraries
 sort $unsorted | uniq | while read library ; do
 # linux-vdso and linux-gate are pseudo libraries and do not correspond to a file
 # libsystemd-shared is in /lib/systemd, so it is not found by copy, and
 # it is copied below anyway
   if [[ "$library" == linux-vdso.so.1 ]] ||
-     [[ "$library" == linux-gate.so.1 ]] ||
-     [[ "$library" == libsystemd-shared* ]]; then
+     [[ "$library" == linux-gate.so.1 ]]; then
     continue
   fi
 
