@@ -66,6 +66,7 @@ fi
 mkdir -p /run
 mount -t proc /proc /proc
 mount -t sysfs /sys /sys
+mount -t debugfs debugfs /sys/kernel/debug
 
 # take care of /dev 1) try using devtmpfs and devpts or 2) dev of exiting fs and devpts
 if ! mount -t devtmpfs -o mode=0755 udev /dev; then

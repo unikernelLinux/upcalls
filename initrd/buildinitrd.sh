@@ -76,8 +76,8 @@ install -m0755 $INITIN ${WDIR}/init
 # to an sftp server so we have to pull in enough of openssh to make that work
 mkdir -p ${WDIR}/usr/lib/openssh/
 ldd /usr/lib/openssh/sftp-server | sed "s/\t//" | cut -d " " -f1 >> $unsorted
-copy /usr/lib/openssh/sftp-server usr/lib/openssh/
-ln -s /usr/lib/openssh/sftp-server usr/lib/sftp-server
+copy /usr/lib/openssh/sftp-server ${WDIR}/usr/lib/openssh/
+ln -s /usr/lib/openssh/sftp-server ${WDIR}/usr/lib/sftp-server
 
 # Install basic binaries
 for f in $binfiles ; do
@@ -92,6 +92,11 @@ for f in $sbinfiles ; do
   copy $f sbin
 done
 
+# Copy the locally-built perf tool (built against the target kernel).
+ldd ./perf | sed "s/\t//" | cut -d " " -f1 >> $unsorted
+cp ./perf ${WDIR}/usr/sbin/perf
+chmod 755 ${WDIR}/usr/sbin/perf
+
 for f in `ls app/` ; do
   ldd app/$f | sed "s/\t//" | cut -d " " -f1 >> $unsorted
   cp app/$f ${WDIR}/usr/bin/
@@ -101,6 +106,9 @@ done
 mkdir -p ${WDIR}/usr/lib/systemd
 ldd /usr/lib/systemd/systemd-udevd | sed "s/\t//" | cut -d " " -f1 >> $unsorted
 cp /usr/lib/systemd/systemd-udevd ${WDIR}/usr/lib/systemd/systemd-udevd
+ln -s /usr/lib/systemd/systemd-udevd ${WDIR}/usr/bin/systemd-udevd
+
+cp /usr/lib/x86_64-linux-gnu/systemd/libsystemd-shared* ${WDIR}/usr/lib/
 
 # Install libraries
 sort $unsorted | uniq | while read library ; do
@@ -108,6 +116,7 @@ sort $unsorted | uniq | while read library ; do
 # libsystemd-shared is in /lib/systemd, so it is not found by copy, and
 # it is copied below anyway
   if [[ "$library" == linux-vdso.so.1 ]] ||
+     [[ "$library" == libsystemd-shared* ]] ||
      [[ "$library" == linux-gate.so.1 ]]; then
     continue
   fi

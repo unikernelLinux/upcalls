@@ -18,11 +18,18 @@
 
 CLEANFILES = *~ *.o stamp-initrd data.tar.gz
 
+if ENABLE_LIBUPCALL
+CONFIG_FLAGS = --with-libupcall=../../libupcall
+else
+CONFIG_FLAGS =
+endif
+
 data.tar.gz:
 	touch data.tar.gz
 
 clean:
 	rm -f ${CLEANFILES}
+	cd memcached && ./configure $(CONFIG_FLAGS)
 	make -C memcached clean
 
 stamp-initrd: memcached/memcached
@@ -39,13 +46,8 @@ stamp-memcached-dir:
 	touch $@
 
 memcached/memcached: stamp-memcached-dir
-	if [ -z "${ENABLE_LIBUPCALL}" ]; then \
-	cd memcached && git checkout vanilla; \
-	else \
-	cd memcached && git checkout upcalls; \
-	fi
 	cd memcached && ./autogen.sh
-	cd memcached && ./configure
+	cd memcached && ./configure $(CONFIG_FLAGS)
 	make -j$(nproc) -C memcached
 
 all: memcached/memcached

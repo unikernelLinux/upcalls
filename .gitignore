@@ -1,9 +1,13 @@
 #Local project entries
 linux/
 
+# vscode settings
+.vscode/
+
 #Autoconf output
 Makefile.in
 Makefile
+depcomp
 aclocal.m4
 autom4te.cache
 compile
@@ -28,6 +32,18 @@ tcp_client
 event-tester/stamp-initrd
 event-tester/liburing
 event-tester/stamp-liburing-dir
+stamp-h1
+iperf/stamp-iperf-dir
+iperf/stamp-initrd
+iperf/iperf-3.20/src/stamp-h1
+iperf/iperf-3.20.tar.gz
+iperf/iperf-3.20/
+iperf/iperf
+
+memcached/stamp-initrd
+memcached/stamp-memcached-dir
+memcached/memcached/stamp-h1
+
 
 # Prerequisites
 *.d
