@@ -97,6 +97,14 @@ static void add_buffers(struct iovec *bufs, size_t cnt)
 
 void return_buffer(void *buf, size_t len)
 {
+	if (buf_cnt == buf_max) {
+		buf_max *= 2;
+		buffers = realloc(buffers, buf_max * sizeof(struct iovec));
+		if (!buffers) {
+			perror("OOM growing buffer pool");
+			exit(1);
+		}
+	}
 	buffers[buf_cnt].iov_base = buf;
 	buffers[buf_cnt].iov_len  = len;
 	buf_cnt++;
@@ -135,7 +143,12 @@ static void upcall_worker_setup(int upfd, size_t bufs, size_t buf_sz)
 		}
 	}
 
-	add_buffers(buffers, buf_cnt);
+	/* buf_cnt stays at bufs here; reset to 0 so run_event_loop's
+	 * "if (buf_cnt > 0) add_buffers(...)" doesn't submit a second
+	 * UP_VEC pointing at the same pool, which would duplicate every
+	 * buffer pointer and cause silent data corruption. */
+	buf_cnt = 0;
+	add_buffers(buffers, buf_max);
 }
 
 void add_read(int fd, void (*work_fn)(struct up_event *evt))
@@ -218,6 +231,11 @@ static int             g_init_count = 0;
 /* go barrier: workers wait for upcall_workers_go() */
 static bool           g_go      = false;
 static pthread_cond_t g_go_cond = PTHREAD_COND_INITIALIZER;
+
+size_t upcall_buf_sz(void)
+{
+	return g_buf_sz;
+}
 
 int upcall_nr_workers(void)
 {

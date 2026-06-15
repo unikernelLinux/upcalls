@@ -87,7 +87,20 @@ int upcall_worker_id(void);
  * Calls queue work into the calling worker's submission batch; the batch
  * is submitted to the kernel on the next run_event_loop round-trip.
  */
+/*
+ * Return a buffer to the per-worker pool so it can be recycled.  Safe to
+ * call with a buffer allocated by the caller (e.g. when the pool ran dry
+ * and a new buffer was malloc'd to replenish it).
+ */
 void return_buffer(void *buf, size_t len);
+
+/*
+ * Size of each buffer in the per-worker pool (the buf_sz passed to
+ * upcall_init).  Use this when allocating a replacement buffer after
+ * receiving -ENOMEM from a read event.
+ */
+size_t upcall_buf_sz(void);
+
 void add_read(int fd, void (*work_fn)(struct up_event *evt));
 void add_accept(int fd, void (*work_fn)(struct up_event *evt));
 void add_write(int fd, void *buf, size_t len,
