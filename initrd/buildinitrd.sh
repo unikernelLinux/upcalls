@@ -28,7 +28,7 @@ cp ./perf /usr/sbin/
 binfiles="cat ls mkdir lspci mknod mount bash top touch awk less"
 binfiles="$binfiles umount sed sleep ln rm uname grep nproc"
 binfiles="$binfiles readlink basename chmod ps pidof pgrep pkill"
-binfiles="$binfiles cut netstat ip kmod strace udevadm cp taskset"
+binfiles="$binfiles cut netstat ip kmod strace cp taskset"
 
 sbinfiles="modprobe rmmod rdmsr wrmsr ethtool halt dropbear"
 
