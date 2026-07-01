@@ -83,9 +83,6 @@ fi
 [[ -e /dev/pts ]] || mkdir /dev/pts
 mount -t devpts devpts /dev/pts
 
-# Some things don't work properly without /etc/mtab.
-ln -sf /proc/mounts /etc/mtab
-
 # Start udev to load modules for hardware
 /usr/lib/systemd/systemd-udevd --daemon --resolve-names=never
 
@@ -96,9 +93,12 @@ done
 
 sleep 2
 
-# Ensure that all found devices have drivers loaded
-udevadm trigger
-udevadm settle
+# Some things don't work properly without /etc/mtab.
+ln -sf /proc/mounts /etc/mtab
+
+# Bring up loopback interface
+/usr/bin/ip link set lo up
+/usr/bin/ip address add 127.0.0.1/8 dev lo
 
 # Print cmdline
 echo "CMDLINE" >> /log
@@ -128,7 +128,7 @@ if [ -n "${IP}" ]; then
 		# bind each one to a single CPU to preserve data locality
 		CPU_CNT=$(nproc)
 		/usr/sbin/ethtool -L ${INF} rx ${CPU_CNT} tx ${CPU_CNT}
-
+		
 		PCI_ADDR=$(basename $(readlink /sys/class/net/${INF}/device))
 		CPU_IDX=0
 		grep ${PCI_ADDR} /proc/interrupts | while read -r line; do

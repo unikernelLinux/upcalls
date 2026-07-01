@@ -28,7 +28,7 @@ cp ./perf /usr/sbin/
 binfiles="cat ls mkdir lspci mknod mount bash top touch awk less"
 binfiles="$binfiles umount sed sleep ln rm uname grep nproc"
 binfiles="$binfiles readlink basename chmod ps pidof pgrep pkill"
-binfiles="$binfiles cut netstat ip kmod strace udevadm"
+binfiles="$binfiles cut netstat ip kmod strace udevadm cp taskset"
 
 sbinfiles="modprobe rmmod rdmsr wrmsr ethtool halt dropbear"
 
@@ -43,7 +43,7 @@ mkdir -p ${WDIR}
 chmod 775 ${WDIR}
 
 # Create base directory structure
-for dir in  "${WDIR}/dev" "${WDIR}/etc/dropbear" "${WDIR}/run" "${WDIR}/sys" "${WDIR}/proc" "${WDIR}/usr/bin" "${WDIR}/usr/lib/x86_64-linux-gnu" "${WDIR}/usr/lib64" "${WDIR}/usr/sbin" "${WDIR}/var/run" "${WDIR}/tmp"
+for dir in  "${WDIR}/dev" "${WDIR}/etc/dropbear" "${WDIR}/run" "${WDIR}/sys" "${WDIR}/proc" "${WDIR}/usr/bin" "${WDIR}/usr/lib/x86_64-linux-gnu" "${WDIR}/usr/lib64" "${WDIR}/usr/sbin" "${WDIR}/var/run" "${WDIR}/tmp" "${WDIR}/etc"
 do
 	mkdir -p $dir
 done
@@ -77,7 +77,7 @@ install -m0755 $INITIN ${WDIR}/init
 mkdir -p ${WDIR}/usr/lib/openssh/
 ldd /usr/lib/openssh/sftp-server | sed "s/\t//" | cut -d " " -f1 >> $unsorted
 copy /usr/lib/openssh/sftp-server ${WDIR}/usr/lib/openssh/
-ln -s /usr/lib/openssh/sftp-server ${WDIR}/usr/lib/sftp-server
+ln -s openssh/sftp-server ${WDIR}/usr/lib/sftp-server
 
 # Install basic binaries
 for f in $binfiles ; do
