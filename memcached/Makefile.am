@@ -18,10 +18,10 @@
 
 CLEANFILES = *~ *.o stamp-initrd data.tar.gz
 
+CONFIG_FLAGS = --disable-extstore
+
 if ENABLE_LIBUPCALL
-CONFIG_FLAGS = --with-libupcall=../../libupcall
-else
-CONFIG_FLAGS =
+CONFIG_FLAGS += --with-libupcall=../../libupcall
 endif
 
 data.tar.gz:
