@@ -32,6 +32,7 @@ qemu-system-x86_64 \
     -append "console=ttyS0 net.ifnames=0 biosdevname=0 nordand nopti nokaslr -- IP=192.168.222.128 MAC=52:54:00:12:34:56 AFFINITY=${4}" \
     -netdev tap,ifname=${TAPDEV},id=eth0,script=no,downscript=no${QUEUES} \
     -device virtio-net-pci,netdev=eth0,${MQ}mac=52:54:00:12:34:56 \
-    -smp $SMP $DEBUG
+    -machine smp-cache.0.cache=l3,smp-cache.0.topology=socket \
+    -smp $SMP,sockets=1,cores=$SMP,threads=1 $DEBUG
 
 ip tuntap del dev $TAPDEV mode tap ${TMQ}
