@@ -17,6 +17,7 @@ install-sh
 config.*
 configure
 initrd/perf
+initrd/app
 data.tar.gz
 configure~
 
