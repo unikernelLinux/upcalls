@@ -9,4 +9,4 @@ RUN apt-get -y install bash sed libelf-dev bc hostname perl dropbear dropbear-bi
 	net-tools openssh-server openssh-sftp-server less ethtool libacl1 kmod libbabeltrace1 \
 	libdebuginfod1t64 libnuma1 libpfm4 libpython3.13 libslang2 libtraceevent1 kmod strace \
 	firmware-linux-nonfree firmware-realtek firmware-bnx2 firmware-bnx2x firmware-qlogic \
-	libevent-dev libzmq5
+	libevent-dev libzmq5 util-linux
