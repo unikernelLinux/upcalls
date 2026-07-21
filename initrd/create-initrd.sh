@@ -7,9 +7,9 @@ pushd ../linux
 INSTALL_MOD_PATH=${ABSINIT} make -j`nproc` modules_install
 popd
 docker build upcall-base -t upcall-base:latest
-CONTAINER=$(docker run --rm --privileged -v ${ABSINIT}:/src -v /lib/firmware:/src/firmware -dit upcall-base:latest /bin/bash)
-docker exec -w /src/ -it $CONTAINER ./set-passwd.sh
-docker exec -w /src/ -it $CONTAINER ./buildinitrd.sh upcall-initrd $1
+CONTAINER=$(docker run --rm --privileged -v ${ABSINIT}:/src -v /lib/firmware:/src/firmware -d upcall-base:latest sleep infinity)
+docker exec -w /src/ $CONTAINER ./set-passwd.sh
+docker exec -w /src/ $CONTAINER ./buildinitrd.sh upcall-initrd $1
 docker stop $CONTAINER >/dev/null 2>&1 &
 rmdir firmware
 rmdir lib
