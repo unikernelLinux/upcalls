@@ -29,7 +29,7 @@ data.tar.gz:
 
 clean:
 	rm -f ${CLEANFILES}
-	cd memcached && ./configure $(CONFIG_FLAGS)
+	cd memcached && ./configure CFLAGS="-g -O2 -fno-omit-frame-pointer" $(CONFIG_FLAGS)
 	make -C memcached clean
 
 stamp-initrd: memcached/memcached
@@ -47,7 +47,7 @@ stamp-memcached-dir:
 
 memcached/memcached: stamp-memcached-dir
 	cd memcached && ./autogen.sh
-	cd memcached && ./configure $(CONFIG_FLAGS)
+	cd memcached && ./configure CFLAGS="-g -O2 -fno-omit-frame-pointer" $(CONFIG_FLAGS)
 	make -j$(nproc) -C memcached
 
 all: memcached/memcached
