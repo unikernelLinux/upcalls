@@ -49,9 +49,9 @@
 /* Low-level syscall wrappers — private to this file                   */
 /* ------------------------------------------------------------------ */
 
-static int upcall_create(int flags)
+static int upcall_create(size_t batch_sz, int flags)
 {
-	return syscall(SYS_upcall_create, flags);
+	return syscall(SYS_upcall_create, batch_sz, flags);
 }
 
 static int upcall_submit(int upfd, int in_cnt, struct up_event *in,
@@ -110,10 +110,10 @@ void return_buffer(void *buf, size_t len)
 	buf_cnt++;
 }
 
-static void upcall_worker_setup(int upfd, size_t bufs, size_t buf_sz)
+static void upcall_worker_setup(int upfd, size_t batch_sz, size_t buf_sz)
 {
-	work_max  = 4 * EVTS;
-	recv_cnt  = bufs;	/* match completions to pool size */
+	work_max  = batch_sz;
+	recv_cnt  = batch_sz;	/* match completions to pool size */
 	work_cnt  = 0;
 
 	work = calloc(work_max, sizeof(struct up_event));
@@ -128,12 +128,12 @@ static void upcall_worker_setup(int upfd, size_t bufs, size_t buf_sz)
 		exit(1);
 	}
 
-	buffers = calloc(bufs, sizeof(struct iovec));
+	buffers = calloc(batch_sz, sizeof(struct iovec));
 	if (!buffers) {
 		perror("OOM");
 		exit(1);
 	}
-	buf_max = bufs;
+	buf_max = batch_sz;
 	for (buf_cnt = 0; buf_cnt < buf_max; buf_cnt++) {
 		buffers[buf_cnt].iov_len  = buf_sz;
 		buffers[buf_cnt].iov_base = calloc(1, buf_sz);
@@ -274,7 +274,7 @@ static void *upcall_worker_fn(void *arg)
 	return NULL;
 }
 
-int upcall_init(size_t bufs, size_t buf_sz,
+int upcall_init(size_t batch_sz, size_t buf_sz,
 		void (*setup_fn)(int worker_id, int nr_workers),
 		void (*loop_fn)(void))
 {
@@ -284,12 +284,12 @@ int upcall_init(size_t bufs, size_t buf_sz,
 	pthread_t tid;
 	int ret;
 
-	g_upfd = upcall_create(0);
+	g_upfd = upcall_create(batch_sz, 0);
 	if (g_upfd < 0)
 		return -errno;
 
 	g_nr_workers = nr;
-	g_bufs       = bufs;
+	g_bufs       = batch_sz;
 	g_buf_sz     = buf_sz;
 	g_setup_fn   = setup_fn;
 	g_loop_fn    = loop_fn;

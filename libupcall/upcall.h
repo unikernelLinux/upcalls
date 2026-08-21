@@ -64,7 +64,7 @@ int upcall_nr_workers(void);
  *
  * Returns 0 on success, -errno on failure.
  */
-int upcall_init(size_t bufs, size_t buf_sz,
+int upcall_init(size_t batch_sz, size_t buf_sz,
 		void (*setup_fn)(int worker_id, int nr_workers),
 		void (*loop_fn)(void));
 

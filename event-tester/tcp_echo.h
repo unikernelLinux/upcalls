@@ -15,9 +15,6 @@
 
 #include "echo_defs.h"
 
-/*
- * 
- */
 struct transaction {
 	struct transaction *next;
 	struct TscLog *accept_log;

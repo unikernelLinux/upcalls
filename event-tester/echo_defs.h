@@ -17,16 +17,16 @@
 #define PAYLOAD_SIZE 32
 #endif
 
-#ifndef BACKLOG
-#define BACKLOG 20
-#endif
-
 #ifndef MAX_CONNS
 #define MAX_CONNS 1024
 #endif
 
 #ifndef BUF_COUNT
-#define BUF_COUNT 128
+#define BUF_COUNT 32
+#endif
+
+#ifndef BACKLOG
+#define BACKLOG BUF_COUNT
 #endif
 
 #define TOTAL_EVENTS 5
