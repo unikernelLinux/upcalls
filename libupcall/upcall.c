@@ -189,6 +189,17 @@ void add_accept(int fd, void (*work_fn)(struct up_event *evt))
 	work_cnt++;
 }
 
+void add_close(int fd)
+{
+	if (work_cnt == work_max)
+		expand_queue();
+
+	work[work_cnt].fd 	   = fd;
+	work[work_cnt].type    = UP_CLOSE;
+	work[work_cnt].work_fn = NULL;
+	work_cnt++;
+}
+
 static void run_event_loop(int upfd, int continuous)
 {
 	int ret;
