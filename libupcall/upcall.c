@@ -87,11 +87,14 @@ static __thread int buf_max;
 /* ------------------------------------------------------------------ */
 #define UPCALL_CACHELINE 64
 #define UPCALL_BATCH_INTERVAL_MS 100	/* default; override via env */
+#define UPCALL_TIME_BUCKETS 40		/* log2(ns) userspace-processing buckets */
 
 static uint64_t   *g_batch_stats;	/* nr_workers padded slots; NULL = off */
 static size_t      g_batch_stride;	/* per-worker stride, in uint64 units */
 static size_t      g_batch_hist_len;	/* histogram buckets = batch_size + 1 */
+static size_t      g_time_hist_len;	/* log2(ns) buckets = UPCALL_TIME_BUCKETS */
 static const char *g_batch_path;	/* CSV output path (from env) */
+static const char *g_ctl_path;		/* control file (UPCALL_BATCH_CTL); reset/dump */
 
 static __thread uint64_t *my_batch_slot;	/* this worker's slot, or NULL */
 
@@ -230,13 +233,45 @@ void add_close(int fd)
 	work_cnt++;
 }
 
+static uint64_t now_ns(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * 1000000000ull + ts.tv_nsec;
+}
+
 static void run_event_loop(int upfd, int continuous)
 {
 	int ret;
+	/* Per-thread, persists across calls: the managed worker pool invokes this
+	 * with continuous=false (one iteration per call), so a plain local would
+	 * reset to 0 every call and the utime bump (gated on proc_start) would
+	 * never fire. static __thread carries the previous submit's return time
+	 * across calls without sharing between worker threads. */
+	static __thread uint64_t proc_start;	/* 0 until the first submit returns */
 
 	do {
 		if (buf_cnt > 0)
 			add_buffers(buffers, buf_cnt);
+
+		/* Partition each worker-loop iteration into its two halves:
+		 *   utime = previous submit's return -> this submit's entry (t0)
+		 *           == pure userspace processing of the last batch
+		 *   ktime = this submit's entry (t0) -> its return (t1)
+		 *           == time spent inside the upcall_submit syscall (kernel)
+		 * proc_start carries the previous return timestamp across iterations. */
+		uint64_t t0 = my_batch_slot ? now_ns() : 0;
+
+		if (my_batch_slot && proc_start) {
+			uint64_t d = t0 - proc_start;
+			int tb = d ? (63 - __builtin_clzll(d)) : 0;
+
+			if (tb >= (int)g_time_hist_len)
+				tb = (int)g_time_hist_len - 1;
+			my_batch_slot[1 + g_batch_hist_len + tb]++;
+		}
+
 		ret = upcall_submit(upfd, work_cnt, work, recv_cnt, receive);
 		if (ret < 0) {
 			perror("upcall_submit failed");
@@ -244,7 +279,15 @@ static void run_event_loop(int upfd, int continuous)
 		}
 
 		if (my_batch_slot) {
+			uint64_t t1 = now_ns();
+			uint64_t k = t1 - t0;
+			int kb = k ? (63 - __builtin_clzll(k)) : 0;
 			size_t b = (size_t)ret;
+
+			if (kb >= (int)g_time_hist_len)
+				kb = (int)g_time_hist_len - 1;
+			my_batch_slot[1 + g_batch_hist_len + g_time_hist_len + kb]++;
+			proc_start = t1;	/* userspace clock for the next batch */
 
 			if (b >= g_batch_hist_len)
 				b = g_batch_hist_len - 1;
@@ -323,6 +366,84 @@ static void *upcall_worker_fn(void *arg)
 }
 
 /*
+ * Poll the $UPCALL_BATCH_CTL control file (checked once per monitor interval)
+ * for a one-line command, mirroring the tx_lat debugfs reset/dump idiom so a
+ * QPS sweep can bracket each level:
+ *   reset <tag>          zero all counters (tag makes repeated resets differ so
+ *                        the content-changed check fires each time)
+ *   dump  <path>         write the current cumulative histogram to <path>,
+ *                        summed across workers, in the same "=section
+ *                        upper_ns count" shape the tx_lat plot parses
+ * `prev` is the monitor's delta baseline, zeroed alongside a reset so the
+ * continuous CSV deltas don't underflow.
+ */
+static void batch_ctl_poll(uint64_t *prev, size_t n)
+{
+	static char last[256];
+	char cmd[256];
+	size_t len;
+	FILE *cf = fopen(g_ctl_path, "r");
+
+	if (!cf)
+		return;
+	len = fread(cmd, 1, sizeof(cmd) - 1, cf);
+	fclose(cf);
+	cmd[len] = '\0';
+	if (strcmp(cmd, last) == 0)
+		return;			/* unchanged since last poll */
+	memcpy(last, cmd, sizeof(last));
+
+	if (strncmp(cmd, "reset", 5) == 0) {
+		memset(g_batch_stats, 0, n * g_batch_stride * sizeof(uint64_t));
+		memset(prev, 0, n * g_batch_stride * sizeof(uint64_t));
+	} else if (strncmp(cmd, "dump ", 5) == 0) {
+		char path[200];
+		FILE *df;
+
+		if (sscanf(cmd + 5, "%199s", path) != 1)
+			return;
+		df = fopen(path, "w");
+		if (!df)
+			return;
+		fprintf(df, "=utime upper_ns count\n");
+		for (size_t b = 0; b < g_time_hist_len; b++) {
+			uint64_t c = 0;
+
+			for (size_t w = 0; w < n; w++)
+				c += g_batch_stats[w * g_batch_stride +
+						   1 + g_batch_hist_len + b];
+			if (c)
+				fprintf(df, "%llu %llu\n",
+					(unsigned long long)(1ull << (b + 1)),
+					(unsigned long long)c);
+		}
+		fprintf(df, "=ktime upper_ns count\n");
+		for (size_t b = 0; b < g_time_hist_len; b++) {
+			uint64_t c = 0;
+
+			for (size_t w = 0; w < n; w++)
+				c += g_batch_stats[w * g_batch_stride +
+						   1 + g_batch_hist_len +
+						   g_time_hist_len + b];
+			if (c)
+				fprintf(df, "%llu %llu\n",
+					(unsigned long long)(1ull << (b + 1)),
+					(unsigned long long)c);
+		}
+		fprintf(df, "=batch size count\n");
+		for (size_t b = 0; b < g_batch_hist_len; b++) {
+			uint64_t c = 0;
+
+			for (size_t w = 0; w < n; w++)
+				c += g_batch_stats[w * g_batch_stride + 1 + b];
+			if (c)
+				fprintf(df, "%zu %llu\n", b, (unsigned long long)c);
+		}
+		fclose(df);
+	}
+}
+
+/*
  * Snapshot every worker's batch histogram once per interval and append the
  * per-interval deltas to $UPCALL_BATCH_STATS as CSV.  Runs unpinned and mostly
  * asleep; reads are plain aligned 64-bit loads of monotonically-incremented
@@ -358,6 +479,14 @@ static void *batch_monitor_fn(void *arg)
 	fprintf(f, "time_ms,worker,submits");
 	for (size_t b = 0; b < g_batch_hist_len; b++)
 		fprintf(f, ",h%zu", b);
+	/* t<b>: count of batches whose userspace processing time fell in
+	 * [2^b, 2^(b+1)) ns -- log2(ns), same bucketing as the kernel tx_lat
+	 * histograms, so percentiles/CDFs compute the same way. */
+	for (size_t b = 0; b < g_time_hist_len; b++)
+		fprintf(f, ",t%zu", b);
+	/* k<b>: same log2(ns) bucketing for time spent inside upcall_submit. */
+	for (size_t b = 0; b < g_time_hist_len; b++)
+		fprintf(f, ",k%zu", b);
 	fprintf(f, "\n");
 
 	clock_gettime(CLOCK_MONOTONIC, &start);
@@ -383,11 +512,25 @@ static void *batch_monitor_fn(void *arg)
 			for (size_t b = 0; b < g_batch_hist_len; b++)
 				fprintf(f, ",%llu",
 					(unsigned long long)(cur[1 + b] - pv[1 + b]));
+			for (size_t b = 0; b < g_time_hist_len; b++) {
+				size_t i = 1 + g_batch_hist_len + b;
+
+				fprintf(f, ",%llu",
+					(unsigned long long)(cur[i] - pv[i]));
+			}
+			for (size_t b = 0; b < g_time_hist_len; b++) {
+				size_t i = 1 + g_batch_hist_len + g_time_hist_len + b;
+
+				fprintf(f, ",%llu",
+					(unsigned long long)(cur[i] - pv[i]));
+			}
 			fprintf(f, "\n");
 			for (size_t k = 0; k < g_batch_stride; k++)
 				pv[k] = cur[k];
 		}
 		fflush(f);
+		if (g_ctl_path)
+			batch_ctl_poll(prev, n);
 	}
 	return NULL;
 }
@@ -419,13 +562,16 @@ int upcall_init(size_t batch_sz, size_t buf_sz,
 	 * $UPCALL_BATCH_STATS is unset.
 	 */
 	g_batch_path = getenv("UPCALL_BATCH_STATS");
+	g_ctl_path = getenv("UPCALL_BATCH_CTL");	/* polled by the monitor */
 	if (g_batch_path) {
 		const size_t per_line = UPCALL_CACHELINE / sizeof(uint64_t);
 
 		g_batch_hist_len = batch_sz + 1;
-		/* [submits] + hist[0..batch_sz], rounded up to a cacheline. */
-		g_batch_stride = ((1 + g_batch_hist_len) + (per_line - 1)) &
-				 ~(per_line - 1);
+		g_time_hist_len = UPCALL_TIME_BUCKETS;
+		/* [submits] + batch-size hist[0..batch_sz] + utime log2(ns) hist
+		 * + ktime log2(ns) hist, rounded up to a cacheline. */
+		g_batch_stride = ((1 + g_batch_hist_len + 2 * g_time_hist_len) +
+				  (per_line - 1)) & ~(per_line - 1);
 		g_batch_stats = aligned_alloc(UPCALL_CACHELINE,
 				(size_t)nr * g_batch_stride * sizeof(uint64_t));
 		if (g_batch_stats) {
