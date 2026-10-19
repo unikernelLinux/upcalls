@@ -119,7 +119,7 @@ fi
 
 /usr/bin/ip link set $INF up
 mkdir -p /var/lib/dhcp
-/usr/sbin/dhclient -v $INF >> /log 2>&1
+/usr/sbin/dhclient -1 -v $INF >> /log 2>&1
 
 if [ -n "${AFFINITY}" ]; then
 	# Receive queue affinity has been requested, we will try and create a receive queue per CPU and

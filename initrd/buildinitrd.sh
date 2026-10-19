@@ -30,7 +30,7 @@ binfiles="$binfiles umount sed sleep ln rm uname grep nproc mpstat"
 binfiles="$binfiles readlink basename chmod ps pidof pgrep pkill"
 binfiles="$binfiles cut netstat ip kmod strace cp taskset kill nohup"
 
-sbinfiles="modprobe rmmod rdmsr wrmsr ethtool halt dropbear"
+sbinfiles="modprobe rmmod rdmsr wrmsr ethtool halt dropbear dhclient"
 
 unsorted=$(mktemp /tmp/unsorted.XXXXXXXXXX)
 
@@ -51,6 +51,9 @@ ln -s usr/bin  ${WDIR}/bin
 ln -s usr/lib  ${WDIR}/lib
 ln -s usr/sbin ${WDIR}/sbin
 ln -s lib      ${WDIR}/lib64
+
+# dhclient fails without an fstab, even an empty one.
+touch ${WDIR}/etc/fstab
 
 # Create necessary device nodes
 mknod -m 640 ${WDIR}/dev/tty0    c 4 0
@@ -78,6 +81,13 @@ mkdir -p ${WDIR}/usr/lib/openssh/
 ldd /usr/lib/openssh/sftp-server | sed "s/\t//" | cut -d " " -f1 >> $unsorted
 copy /usr/lib/openssh/sftp-server ${WDIR}/usr/lib/openssh/
 ln -s openssh/sftp-server ${WDIR}/usr/lib/sftp-server
+
+# dhclient execs dhclient-script to apply a lease; it's not a shared-library
+# dependency so ldd/copy() won't pull it in on its own.
+mkdir -p ${WDIR}/etc/dhcp
+cp /usr/sbin/dhclient-script ${WDIR}/usr/sbin/dhclient-script
+chmod 755 ${WDIR}/usr/sbin/dhclient-script
+cp /etc/dhcp/dhclient.conf ${WDIR}/etc/dhcp/dhclient.conf
 
 # Install basic binaries
 for f in $binfiles ; do
