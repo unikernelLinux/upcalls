@@ -46,10 +46,6 @@
 
 #define EVTS 4
 
-/* ------------------------------------------------------------------ */
-/* Low-level syscall wrappers — private to this file                   */
-/* ------------------------------------------------------------------ */
-
 static int upcall_create(size_t batch_sz, int flags)
 {
 	return syscall(SYS_upcall_create, batch_sz, flags);
@@ -61,10 +57,6 @@ static int upcall_submit(int upfd, int in_cnt, struct up_event *in,
 	return syscall(SYS_upcall_submit, upfd, in_cnt, in, out_cnt, out);
 }
 
-/* ------------------------------------------------------------------ */
-/* Per-worker thread-local submission state                            */
-/* ------------------------------------------------------------------ */
-
 static __thread struct up_event *work;
 static __thread int work_cnt;
 static __thread int work_max;
@@ -74,17 +66,11 @@ static __thread struct iovec *buffers;
 static __thread int buf_cnt;
 static __thread int buf_max;
 
-/* ------------------------------------------------------------------ */
-/* Completion-batch-size histogram (opt-in via UPCALL_BATCH_STATS env) */
-/*                                                                     */
-/* Each worker owns a cacheline-padded slot: slot[0] = # of submits,   */
-/* slot[1 + n] = # of submits that returned n completions (n in        */
-/* 0..batch_size).  Recording is a couple of writes to the worker's    */
-/* own slot — no locks, no false sharing.  A monitor thread snapshots   */
-/* all slots every UPCALL_BATCH_INTERVAL_MS and writes per-interval     */
-/* deltas to the CSV named by $UPCALL_BATCH_STATS.  Disabled (NULL) when */
-/* the env var is unset, in which case the hot path skips it entirely.  */
-/* ------------------------------------------------------------------ */
+/* Completion-batch-size histogram, opt-in via $UPCALL_BATCH_STATS. Each
+ * worker writes only its own cacheline-padded slot (no locks, no false
+ * sharing); a monitor thread snapshots all slots periodically and writes
+ * per-interval deltas to the named CSV. NULL g_batch_stats means disabled,
+ * and the hot path skips it entirely. */
 #define UPCALL_CACHELINE 64
 #define UPCALL_BATCH_INTERVAL_MS 100	/* default; override via env */
 #define UPCALL_TIME_BUCKETS 40		/* log2(ns) userspace-processing buckets */
@@ -244,23 +230,19 @@ static uint64_t now_ns(void)
 static void run_event_loop(int upfd, int continuous)
 {
 	int ret;
-	/* Per-thread, persists across calls: the managed worker pool invokes this
-	 * with continuous=false (one iteration per call), so a plain local would
-	 * reset to 0 every call and the utime bump (gated on proc_start) would
-	 * never fire. static __thread carries the previous submit's return time
-	 * across calls without sharing between worker threads. */
-	static __thread uint64_t proc_start;	/* 0 until the first submit returns */
+	/* static __thread, not a plain local: the managed pool calls this with
+	 * continuous=false (one iteration per call), so a local would reset to
+	 * 0 every call and the utime bucket below would never fire. 0 until
+	 * the first submit returns. */
+	static __thread uint64_t proc_start;
 
 	do {
 		if (buf_cnt > 0)
 			add_buffers(buffers, buf_cnt);
 
-		/* Partition each worker-loop iteration into its two halves:
-		 *   utime = previous submit's return -> this submit's entry (t0)
-		 *           == pure userspace processing of the last batch
-		 *   ktime = this submit's entry (t0) -> its return (t1)
-		 *           == time spent inside the upcall_submit syscall (kernel)
-		 * proc_start carries the previous return timestamp across iterations. */
+		/* utime = previous submit's return -> now (userspace processing
+		 * of the last batch); ktime = now -> upcall_submit's return
+		 * (time inside the syscall). */
 		uint64_t t0 = my_batch_slot ? now_ns() : 0;
 
 		if (my_batch_slot && proc_start) {
@@ -302,10 +284,6 @@ static void run_event_loop(int upfd, int continuous)
 		memset(receive, 0, recv_cnt * sizeof(struct up_event));
 	} while (continuous);
 }
-
-/* ------------------------------------------------------------------ */
-/* Managed worker pool                                                 */
-/* ------------------------------------------------------------------ */
 
 static int    g_upfd       = -1;
 static int    g_nr_workers = 0;
@@ -366,16 +344,14 @@ static void *upcall_worker_fn(void *arg)
 }
 
 /*
- * Poll the $UPCALL_BATCH_CTL control file (checked once per monitor interval)
- * for a one-line command, mirroring the tx_lat debugfs reset/dump idiom so a
- * QPS sweep can bracket each level:
- *   reset <tag>          zero all counters (tag makes repeated resets differ so
- *                        the content-changed check fires each time)
- *   dump  <path>         write the current cumulative histogram to <path>,
- *                        summed across workers, in the same "=section
- *                        upper_ns count" shape the tx_lat plot parses
- * `prev` is the monitor's delta baseline, zeroed alongside a reset so the
- * continuous CSV deltas don't underflow.
+ * Poll $UPCALL_BATCH_CTL for a one-line command, so a QPS sweep can bracket
+ * each level without restarting the process:
+ *   reset <tag>   zero all counters (tag varies so repeated resets each
+ *                 register as a change)
+ *   dump  <path>  write the cumulative histogram to <path>, summed across
+ *                 workers, in the tx_lat "=section upper_ns count" shape
+ * `prev` is the monitor's delta baseline; zeroed with a reset so the CSV
+ * deltas don't underflow.
  */
 static void batch_ctl_poll(uint64_t *prev, size_t n)
 {

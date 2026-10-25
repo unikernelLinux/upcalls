@@ -83,11 +83,6 @@ void upcall_workers_go(void);
  */
 int upcall_worker_id(void);
 
-/* --- Callback-facing API ---
- * Safe to call from setup_fn, loop_fn, and event callbacks.
- * Calls queue work into the calling worker's submission batch; the batch
- * is submitted to the kernel on the next run_event_loop round-trip.
- */
 /*
  * Return a buffer to the per-worker pool so it can be recycled.  Safe to
  * call with a buffer allocated by the caller (e.g. when the pool ran dry
@@ -102,6 +97,8 @@ void return_buffer(void *buf, size_t len);
  */
 size_t upcall_buf_sz(void);
 
+/* Safe from setup_fn, loop_fn, and event callbacks: each queues into the
+ * calling worker's own batch, submitted on the next event-loop round-trip. */
 void add_read(int fd, void (*work_fn)(struct up_event *evt));
 void add_accept(int fd, void (*work_fn)(struct up_event *evt));
 void add_write(int fd, void *buf, size_t len,
