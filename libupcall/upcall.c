@@ -279,8 +279,16 @@ static void run_event_loop(int upfd, int continuous)
 
 		buf_cnt  = 0;
 		work_cnt = 0;
-		for (int i = 0; i < ret; i++)
-			receive[i].work_fn(&receive[i]);
+		for (int i = 0; i < ret; i++) {
+			/* The kernel now reports a failed arm/close as an event with
+			 * result < 0 instead of aborting the whole submit. A failed
+			 * UP_CLOSE (and any other work_fn-less input) comes back with
+			 * work_fn == NULL, so never dispatch blindly. A handler that is
+			 * present must itself check evt->result (< 0 == failure); the
+			 * read/write/accept handlers already do. */
+			if (receive[i].work_fn)
+				receive[i].work_fn(&receive[i]);
+		}
 		memset(receive, 0, recv_cnt * sizeof(struct up_event));
 	} while (continuous);
 }
