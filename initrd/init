@@ -104,7 +104,7 @@ ulimit -n 200000
 
 # Running experimental setup scripts
 echo "Running Setup scripts" >> /log
-./exp/disable_ht.sh >> /log
+echo off > /sys/devices/system/cpu/smt/control
 ./exp/turbo-boost.sh disable >> /log
 ./exp/freq-scaling.sh disable >> /log
 ./exp/idle-states.sh disable >> /log
