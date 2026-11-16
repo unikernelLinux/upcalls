@@ -105,4 +105,15 @@ void add_write(int fd, void *buf, size_t len,
 	       void (*work_fn)(struct up_event *evt));
 void add_close(int fd);
 
+/*
+ * Optional. When set, each worker hands its whole completion batch to
+ * batch_fn instead of calling the events' work_fn one by one. The
+ * application then owns dispatch: it must call work_fn for every event
+ * that has one (a failed UP_CLOSE comes back with work_fn == NULL) and
+ * must do so before returning, since the batch array is reused for the
+ * next upcall_submit. Gives the application one look at the batch before
+ * any work starts (e.g. to prefetch across it). Call before upcall_init.
+ */
+void upcall_set_batch_fn(void (*batch_fn)(struct up_event *evts, int n));
+
 #endif
